@@ -1,5 +1,14 @@
 package com.example.pruebaaplicacionesmoviles.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.input.VisualTransformation
+
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.*
@@ -18,6 +27,8 @@ fun LoginScreen(loginViewModel: LoginViewModel){
     val mensaje by loginViewModel.mensaje.collectAsState()
     val errorUsuario by loginViewModel.errorUsuario.collectAsState()
     val errorContraseña by loginViewModel.errorContrasena.collectAsState()
+    var mostrarContrasena by remember {mutableStateOf(false) }
+
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -31,6 +42,12 @@ fun LoginScreen(loginViewModel: LoginViewModel){
             value = usuario,
             onValueChange = {nuevoTexto -> loginViewModel.actualizarUsuario(nuevoTexto)},
             label = {Text("Usuario")},
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = null
+                )
+            },
             isError = errorUsuario.isNotEmpty(),
             singleLine = true
         )
@@ -44,7 +61,36 @@ fun LoginScreen(loginViewModel: LoginViewModel){
         OutlinedTextField(
             value = contrasena,
             onValueChange = {nuevoTexto -> loginViewModel.actualizarContrasena(nuevoTexto) },
-            label = {Text("Contraseña")}, visualTransformation = PasswordVisualTransformation(),
+            label = {Text("Contraseña")},
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null
+                )
+            },
+            trailingIcon = {
+                IconButton(
+                    onClick = {
+                        mostrarContrasena = !mostrarContrasena
+                    }
+                ){
+                    Icon(
+                        imageVector = if (mostrarContrasena)
+                            Icons.Filled.VisibilityOff
+                        else
+                            Icons.Filled.Visibility,
+
+                        contentDescription = if (mostrarContrasena)
+                            "Ocultar contraseña"
+                        else
+                            "Mostrar contraseña"
+                    )
+                }
+            },
+            visualTransformation = if (mostrarContrasena)
+                VisualTransformation.None
+            else
+                PasswordVisualTransformation(),
             isError = errorContraseña.isNotEmpty(),
             singleLine = true
         )

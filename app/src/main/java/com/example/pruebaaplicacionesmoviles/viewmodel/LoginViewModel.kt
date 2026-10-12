@@ -53,7 +53,7 @@ class LoginViewModel : ViewModel() {
         }
 
         if (_errorUsuario.value.isEmpty()&& _errorContrasena.value.isEmpty()){
-            _mensaje.value = "Formulario invalidp"
+            _mensaje.value = "Formulario valido"
         }else {
             _mensaje.value= ""
         }
