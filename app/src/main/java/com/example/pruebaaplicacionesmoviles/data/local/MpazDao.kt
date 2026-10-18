@@ -129,4 +129,7 @@ interface MpazDao {
 
     @Query("SELECT COALESCE(MAX(id), 0) FROM asignaciones")
     suspend fun maxIdAsignacion(): Int
+
+    @Query("SELECT * FROM asignaciones WHERE id = :id LIMIT 1")
+    suspend fun obtenerAsignacionPorId(id: Int): AsignacionEntity?
 }
