@@ -34,8 +34,11 @@ abstract class MpazDatabase : RoomDatabase() {
                     context.applicationContext,
                     MpazDatabase::class.java,
                     "mpaz.db"
-                ).build().also { instancia = it }
+                )
+                    .fallbackToDestructiveMigration(true)
+                    .build()
+                    .also { instancia = it }
             }
-        }
+}
     }
 }
