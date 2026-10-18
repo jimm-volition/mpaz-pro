@@ -9,22 +9,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModelProvider
-import com.example.pruebaaplicacionesmoviles.ui.screens.UtpScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.LoginScreen
 import com.example.pruebaaplicacionesmoviles.ui.theme.PruebaAplicacionesMovilesTheme
-import com.example.pruebaaplicacionesmoviles.viewmodel.UtpViewModel
+import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val utpViewModel = ViewModelProvider(
-            this,
-            ViewModelProvider.AndroidViewModelFactory.getInstance(application)
-        )[UtpViewModel::class.java]
+        val loginViewModel = ViewModelProvider(this)[LoginViewModel::class.java]
 
         setContent {
             PruebaAplicacionesMovilesTheme {
-                UtpScreen(viewModel = utpViewModel)
+                LoginScreen(loginViewModel)
             }
         }
     }
