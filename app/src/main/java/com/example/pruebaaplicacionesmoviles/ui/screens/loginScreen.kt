@@ -1,65 +1,65 @@
 
 package com.example.pruebaaplicacionesmoviles.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.pruebaaplicacionesmoviles.data.model.Rol
 import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
 
 @Composable
 fun LoginScreen(loginViewModel: LoginViewModel) {
 
-    val usuario by loginViewModel.usuario.collectAsState() // Observamos el usuario
-    val contrasena by loginViewModel.contrasena.collectAsState() // Observamos la contraseña
-    val mensaje by loginViewModel.mensaje.collectAsState() // Observamos el mensaje del formulario
-    val errorUsuario by loginViewModel.errorUsuario.collectAsState() // Observamos errores del usuario
-    val errorContrasena by loginViewModel.errorContrasena.collectAsState() // Observamos errores de contraseña
+    val usuario by loginViewModel.usuario.collectAsState()
+    val rolSeleccionado by loginViewModel.rolSeleccionado.collectAsState()
+    val mensaje by loginViewModel.mensaje.collectAsState()
+    val errorUsuario by loginViewModel.errorUsuario.collectAsState()
+    val errorRol by loginViewModel.errorRol.collectAsState()
+    val cargando by loginViewModel.cargando.collectAsState()
 
-    var mostrarContrasena by remember {
-        mutableStateOf(false) // Controlamos si la contraseña se muestra o se oculta
-    }
+
 
     Column(
         modifier = Modifier
-            .fillMaxSize() // Ocupa toda la pantalla
-            .padding(24.dp), // Agrega espacio alrededor
+            .fillMaxSize()
+            .padding(24.dp),
 
-        verticalArrangement = Arrangement.Center, // Centra verticalmente los elementos
-        horizontalAlignment = Alignment.CenterHorizontally // Centra horizontalmente
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Text("Bienvenido a MPAZ PRO")
+        Text(
+            text = "Bienvenido a MPAZ PRO",
+            style = MaterialTheme.typography.headlineSmall
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
-            value = usuario, // Muestra el usuario almacenado en el ViewModel
+            value = usuario, //ESTO MUESTRA EL USUARIO ALMACENADO
 
             onValueChange = { nuevoTexto ->
-                loginViewModel.actualizarUsuario(nuevoTexto) // Actualiza el usuario al escribir
+                loginViewModel.actualizarUsuario(nuevoTexto) // ESTO ACTUALIZA EL USUARIO AL ESCRIBIR
             },
 
             label = { Text("Usuario") },
 
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Filled.Person, // Ícono de usuario
+                    imageVector = Icons.Filled.Person,
                     contentDescription = null
                 )
             },
 
-            isError = errorUsuario.isNotEmpty(), // Marca el campo si existe un error
-            singleLine = true // Permite una sola línea
+            isError = errorUsuario.isNotEmpty(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
         )
 
         if (errorUsuario.isNotEmpty()) { // Comprueba si hay error de usuario
@@ -71,55 +71,49 @@ fun LoginScreen(loginViewModel: LoginViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = contrasena, // Muestra el valor de la contraseña
-
-            onValueChange = { nuevoTexto ->
-                loginViewModel.actualizarContrasena(nuevoTexto) // Actualiza la contraseña
-            },
-
-            label = { Text("Contraseña") },
-
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Filled.Lock, // Ícono de candado
-                    contentDescription = null
-                )
-            },
-
-            trailingIcon = {
-                IconButton(
-                    onClick = {
-                        mostrarContrasena = !mostrarContrasena // Alterna entre mostrar y ocultar
-                    }
-                ) {
-
-                    Icon(
-                        imageVector = if (mostrarContrasena)
-                            Icons.Filled.VisibilityOff
-                        else
-                            Icons.Filled.Visibility,
-
-                        contentDescription = if (mostrarContrasena)
-                            "Ocultar contraseña"
-                        else
-                            "Mostrar contraseña"
-                    )
-                }
-            },
-
-            visualTransformation = if (mostrarContrasena)
-                VisualTransformation.None // Muestra el texto normalmente
-            else
-                PasswordVisualTransformation(), // Oculta los caracteres
-
-            isError = errorContrasena.isNotEmpty(), // Marca el campo si existe un error
-            singleLine = true
+        Text(
+            text = "Selecciona tu rol",
+            style = MaterialTheme.typography.titleMedium
         )
 
-        if (errorContrasena.isNotEmpty()) { // Comprueba si hay error de contraseña
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Recorremos los tres roles disponibles
+        Rol.entries.forEach { rol ->
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        loginViewModel.actualizarRol(rol) // Selecciona el rol
+                    }
+                    .padding(vertical = 4.dp),
+
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                RadioButton(
+                    selected = rolSeleccionado == rol, // Marca el rol seleccionado
+                    onClick = {
+                        loginViewModel.actualizarRol(rol)
+                    }
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = when (rol) {
+                        Rol.ESTUDIANTE -> "Estudiante"
+                        Rol.DOCENTE -> "Docente"
+                        Rol.UTP -> "UTP"
+                    }
+                )
+            }
+        }
+
+        if (errorRol.isNotEmpty()) {
             Text(
-                text = errorContrasena,
+                text = errorRol,
                 color = MaterialTheme.colorScheme.error
             )
         }
@@ -128,14 +122,24 @@ fun LoginScreen(loginViewModel: LoginViewModel) {
 
         Button(
             onClick = {
-                loginViewModel.validarLogin() // Ejecuta las validaciones del ViewModel
-            }
+                loginViewModel.validarLogin() // Busca al usuario en Room
+            },
+
+            enabled = !cargando, // Desactiva el botón mientras consulta
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Ingresar")
+            Text(if (cargando) "Ingresando..." else "Ingresar")
         }
 
-        if (mensaje.isNotEmpty()) { // Muestra el mensaje de validación si existe
-            Text(mensaje)
+        if (mensaje.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = mensaje,
+                color = MaterialTheme.colorScheme.error
+            )
         }
+
+
     }
 }

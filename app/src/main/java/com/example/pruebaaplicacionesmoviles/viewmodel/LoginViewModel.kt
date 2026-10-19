@@ -1,63 +1,170 @@
 package com.example.pruebaaplicacionesmoviles.viewmodel
 
 
-import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.pruebaaplicacionesmoviles.MpazApp
+import com.example.pruebaaplicacionesmoviles.data.model.Rol
+import com.example.pruebaaplicacionesmoviles.data.model.Usuario
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import android.util.Log
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
-class LoginViewModel : ViewModel() {
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _usuario = MutableStateFlow("")
-    val usuario : StateFlow<String> = _usuario.asStateFlow()
-    private val _contrasena = MutableStateFlow("")
-    val contrasena = _contrasena.asStateFlow()
+    // Obtenemos la aplicación para acceder a Room
+    private val app = application as MpazApp
+    private val repositorio = app.repositorio
+
+
+    // ESTO GUARDA LO QUE ESCRIBE EL USUARIO
+
+    private val _usuario = MutableStateFlow("") // Almacena el texto del usuario
+    val usuario: StateFlow<String> = _usuario.asStateFlow()
+
+
+    // ESTO GUARDA EL ROL QUE SELECCIONO EL USUARIO
+    private val _rolSeleccionado = MutableStateFlow<Rol?>(null)
+    val rolSeleccionado: StateFlow<Rol?> = _rolSeleccionado.asStateFlow()
+
+
+    // Guardamos los errores de los campos
     private val _errorUsuario = MutableStateFlow("")
     val errorUsuario = _errorUsuario.asStateFlow()
 
-    private val _errorContrasena = MutableStateFlow("")
-    val errorContrasena = _errorContrasena.asStateFlow()
 
+    private val _errorRol = MutableStateFlow("")
+    val errorRol = _errorRol.asStateFlow()
+
+    // Guardamos los mensajes del Login
     private val _mensaje = MutableStateFlow("")
     val mensaje = _mensaje.asStateFlow()
 
-    fun actualizarContrasena(nuevoTexto: String) {
-        _contrasena.value = nuevoTexto
-        _errorContrasena.value = ""
+    // Indica si estamos consultando la base de datos
+    private val _cargando = MutableStateFlow(false)
+    val cargando = _cargando.asStateFlow()
+
+
+    // ESTO GUARDA EL USUARIO CUANDO INICIA SESION
+    private val _usuarioAutenticado = MutableStateFlow<Usuario?>(null)
+    val usuarioAutenticado = _usuarioAutenticado.asStateFlow()
+
+    fun actualizarUsuario(nuevoTexto: String) {
+        _usuario.value = nuevoTexto // Actualiza lo escrito
+        _errorUsuario.value = "" // Limpia el error anterior
         _mensaje.value = ""
     }
 
-    fun actualizarUsuario(nuevoTexto: String){
-        _usuario.value = nuevoTexto
+    fun actualizarRol(nuevoRol: Rol) {
+        _rolSeleccionado.value = nuevoRol // Guarda el rol elegido
+        _errorRol.value = "" // Limpia el error anterior
+        _mensaje.value = ""
+    }
+
+    fun validarLogin() {
+
+        val alias = _usuario.value.trim().uppercase() // Limpia el alias
+        val rol = _rolSeleccionado.value // Obtiene el rol elegido
+
+        // Validamos que se haya ingresado un usuario
+        _errorUsuario.value = when {
+            alias.isBlank() -> "Debes ingresar un usuario"
+            alias.length < 4 -> "Debes ingresar mínimo 4 caracteres"
+            else -> ""
+        }
+
+        // Validamos que se haya seleccionado un rol
+        _errorRol.value = if (rol == null) {
+            "Debes seleccionar un rol"
+        } else {
+            ""
+        }
+
+        // Si existe un error, detenemos el Login
+        if (_errorUsuario.value.isNotEmpty() || _errorRol.value.isNotEmpty()) {
+            return
+        }
+
+        if (_cargando.value) return // Evita consultas duplicadas
+
+        viewModelScope.launch {
+
+            _cargando.value = true // Inicia la consulta
+            _mensaje.value = ""
+
+            try {
+                // Esperamos que Room termine de cargar los datos iniciales
+                app.preparacion.await()
+
+                // Buscamos el usuario en la base de datos
+                val usuarioEncontrado = repositorio.buscarUsuario(alias)
+
+                when {
+                    usuarioEncontrado == null -> {
+                        _mensaje.value = "El usuario no existe"
+                    }
+
+                    usuarioEncontrado.rol != rol -> {
+                        _mensaje.value = "El rol no corresponde a este usuario"
+                    }
+
+                    else -> {
+                        // El usuario existe y su rol coincide
+                        _usuarioAutenticado.value = usuarioEncontrado
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e("ERROR_ROOM", "Error al iniciar sesión", e)
+                _mensaje.value = "No se pudo consultar la base de datos"
+            } finally {
+                _cargando.value = false // Finaliza la consulta
+            }
+        }
+    }
+
+
+    fun cerrarSesion() {
+        _usuarioAutenticado.value = null // Regresa al Login
+        _usuario.value = "" // Limpia el usuario
+        _rolSeleccionado.value = null // Limpia el rol
         _errorUsuario.value = ""
+        _errorRol.value = ""
         _mensaje.value = ""
     }
 
-    fun validarLogin(){
-        if (_usuario.value.isBlank()){
-            _errorUsuario.value = "Debes ingresar un usuario"
-        }else if(_usuario.value.trim().length < 4){
-            _errorUsuario.value = "Debes ingrear minimo 4 caracteres"
-        }else{
-            _errorUsuario.value = ""
-        }
 
-        if (_contrasena.value.isBlank()){
-            _errorContrasena.value = "Debes ingresar una contraseña"
 
-        }else if(_contrasena.value.length <6){
-            _errorContrasena.value = "Debes ingresar minimo 6 caracteres"
-        }else {
-            _errorContrasena.value = ""
-        }
 
-        if (_errorUsuario.value.isEmpty()&& _errorContrasena.value.isEmpty()){
-            _mensaje.value = "Formulario valido"
-        }else {
-            _mensaje.value= ""
-        }
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 }
