@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadesContenido
 import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadDetalleScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.ActividadScreen
+import com.example.pruebaaplicacionesmoviles.viewmodel.ActividadViewModel
 
 import com.example.pruebaaplicacionesmoviles.data.model.Rol
 import com.example.pruebaaplicacionesmoviles.ui.screens.LoginScreen
@@ -37,6 +39,7 @@ class MainActivity : ComponentActivity() {
         val loginViewModel = ViewModelProvider(this)[LoginViewModel::class.java]
         val docenteViewModel = ViewModelProvider(this)[DocenteViewModel::class.java]
         val utpViewModel = ViewModelProvider(this)[UtpViewModel::class.java]
+        val actividadViewModel = ViewModelProvider(this)[ActividadViewModel::class.java]
 
         setContent {
 
@@ -93,6 +96,11 @@ class MainActivity : ComponentActivity() {
                                 mutableStateOf<Int?>(null)
                             }
 
+                            var actividadAbierta by remember(estudiante.id) {
+                                mutableStateOf(false)
+                            }
+
+
 
                             when {
 
@@ -107,21 +115,45 @@ class MainActivity : ComponentActivity() {
                                     // Comprobamos que realmente exista esa unidad
                                     if (unidad != null) {
 
-                                        // Ejecutamos una operación cuando se abre una unidad diferente
-                                        LaunchedEffect(estudiante.id, unidad.id) {
+                                        // NUEVO: COMPROBAMOS SI EL ESTUDIANTE ABRIO LAS ACTIVIDADES
+                                        if (actividadAbierta) {
 
-                                            // Guardamos en Room que el estudiante revisó su contenido
-                                            repositorio.marcarContenidoVisto(estudiante.id, unidad.id)
-                                        }
+                                            // NUEVO: MOSTRAMOS LA PANTALLA DE ACTIVIDADES
+                                            ActividadScreen(
+                                                estudianteId = estudiante.id, // ENVIAMOS EL ID DEL ESTUDIANTE
 
-                                        // Mostramos la pantalla con la explicación y el audio
-                                        UnidadDetalleScreen(
-                                            unidad = unidad, // Enviamos la unidad encontrada
+                                                unidadId = unidad.id, // ENVIAMOS EL ID DE LA UNIDAD
 
-                                            onVolver = {
-                                                unidadSeleccionada = null // Regresamos a la lista de unidades
+                                                viewModel = actividadViewModel, // ENVIAMOS EL VIEWMODEL DE ACTIVIDADES
+
+                                                onVolver = {
+                                                    actividadAbierta = false // REGRESAMOS AL CONTENIDO EDUCATIVO
+                                                }
+                                            )
+
+                                        } else {
+
+                                            // Ejecutamos una operación cuando se abre una unidad diferente
+                                            LaunchedEffect(estudiante.id, unidad.id) {
+
+                                                // Guardamos en Room que el estudiante revisó su contenido
+                                                repositorio.marcarContenidoVisto(estudiante.id, unidad.id)
                                             }
-                                        )
+
+                                            // Mostramos la pantalla con la explicación y el audio
+                                            UnidadDetalleScreen(
+                                                unidad = unidad, // Enviamos la unidad encontrada
+
+                                                onVolver = {
+                                                    unidadSeleccionada = null // Regresamos a la lista de unidades
+                                                },
+
+                                                // NUEVO: PERMITIMOS ABRIR LAS ACTIVIDADES
+                                                onAbrirActividades = {
+                                                    actividadAbierta = true // CAMBIAMOS A ACTIVIDADSCREEN
+                                                }
+                                            )
+                                        }
 
                                     } else {
 
