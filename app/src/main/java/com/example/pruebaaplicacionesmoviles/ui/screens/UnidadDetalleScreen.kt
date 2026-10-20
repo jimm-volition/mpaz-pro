@@ -17,7 +17,8 @@ import java.util.Locale
 @Composable // Indica que esta función dibuja una pantalla
 fun UnidadDetalleScreen(
     unidad: Unidad, //ESTO RECIBE LA UNIDAD QUE QUEREMOS MOSTRAR
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onAbrirActividades: () -> Unit
 ){
 
     val context = LocalContext.current
@@ -105,7 +106,18 @@ fun UnidadDetalleScreen(
             text = unidad.ejemploGuiado
         )
 
+        Spacer(Modifier.height(16.dp))
+
+        Button(
+            onClick = onAbrirActividades, // AVISA A MAINACTIVITY QUE QUEREMOS ABRIR ACTIVIDADES
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("📝 Resolver actividades") // TEXTO QUE VERA EL ESTUDIANTE
+        }
+
+
         Spacer(Modifier.height(24.dp))
+
 
 
         Button(
