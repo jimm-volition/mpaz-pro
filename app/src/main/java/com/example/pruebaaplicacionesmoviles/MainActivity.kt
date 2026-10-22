@@ -195,7 +195,7 @@ class MainActivity : ComponentActivity() {
                                 else -> {
 
                                     // Colocamos el botón de salir encima del Dashboard
-                                    Column(modifier = Modifier.fillMaxSize()) {
+                                    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
 
                                         // Botón para cerrar sesión
                                         Button(
