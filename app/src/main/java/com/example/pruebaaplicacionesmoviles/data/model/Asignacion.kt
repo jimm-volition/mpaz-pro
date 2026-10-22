@@ -7,5 +7,6 @@ data class Asignacion(
     val unidadId: Int,
     val fechaInicio: String,
     val fechaFin: String,
-    val maxIntentos: Int
+    val maxIntentos: Int,
+    val activa: Boolean = true
 )

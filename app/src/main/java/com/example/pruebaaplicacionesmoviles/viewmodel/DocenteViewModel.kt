@@ -27,7 +27,14 @@ data class DocenteUiState(
     val fechaInicio: String = "2026-10-01",
     val fechaFin: String = "2026-12-15",
     val maxIntentosTexto: String = "2",
-    val errorFormulario: String = "",
+    val datosConfirmados: Boolean = false,
+    val asignacionActiva: Boolean = true,
+    val errorEstudiante: String = "",
+    val errorUnidad: String = "",
+    val errorFechaInicio: String = "",
+    val errorFechaFin: String = "",
+    val errorMaxIntentos: String = "",
+    val errorConfirmacion: String = "",
     val mensaje: String = ""
 )
 
@@ -54,7 +61,6 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
                 val asignables = unidades.filter {
                     it.estado == EstadoUnidad.AUTORIZADO || it.estado == EstadoUnidad.PUBLICADO
                 }
-                // Estudiantes ficticios del docente (semilla: EST01 con docenteId = 2)
                 val estudiantes = listOf(
                     Usuario(3, "EST01", Rol.ESTUDIANTE, "2° Básico A", docenteId)
                 )
@@ -70,23 +76,43 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun actualizarEstudianteId(valor: String) {
-        _estado.update { it.copy(estudianteIdTexto = valor, errorFormulario = "", mensaje = "") }
+        _estado.update {
+            it.copy(estudianteIdTexto = valor, errorEstudiante = "", mensaje = "")
+        }
     }
 
     fun actualizarUnidadId(valor: String) {
-        _estado.update { it.copy(unidadIdTexto = valor, errorFormulario = "", mensaje = "") }
+        _estado.update {
+            it.copy(unidadIdTexto = valor, errorUnidad = "", mensaje = "")
+        }
     }
 
     fun actualizarFechaInicio(valor: String) {
-        _estado.update { it.copy(fechaInicio = valor, errorFormulario = "", mensaje = "") }
+        _estado.update {
+            it.copy(fechaInicio = valor, errorFechaInicio = "", mensaje = "")
+        }
     }
 
     fun actualizarFechaFin(valor: String) {
-        _estado.update { it.copy(fechaFin = valor, errorFormulario = "", mensaje = "") }
+        _estado.update {
+            it.copy(fechaFin = valor, errorFechaFin = "", mensaje = "")
+        }
     }
 
     fun actualizarMaxIntentos(valor: String) {
-        _estado.update { it.copy(maxIntentosTexto = valor, errorFormulario = "", mensaje = "") }
+        _estado.update {
+            it.copy(maxIntentosTexto = valor, errorMaxIntentos = "", mensaje = "")
+        }
+    }
+
+    fun actualizarConfirmacion(valor: Boolean) {
+        _estado.update {
+            it.copy(datosConfirmados = valor, errorConfirmacion = "", mensaje = "")
+        }
+    }
+
+    fun actualizarAsignacionActiva(valor: Boolean) {
+        _estado.update { it.copy(asignacionActiva = valor, mensaje = "") }
     }
 
     fun limpiarMensaje() {
@@ -99,23 +125,60 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
         val unidadId = e.unidadIdTexto.toIntOrNull()
         val maxIntentos = e.maxIntentosTexto.toIntOrNull()
 
-        val error = when {
-            estudianteId == null -> "Elige un ID de estudiante válido (ej: 3)"
+        val errorEstudiante = when {
+            e.estudianteIdTexto.isBlank() -> "Ingresa el ID del estudiante"
+            estudianteId == null -> "Debe ser un número (ej: 3)"
             e.estudiantes.none { it.id == estudianteId } -> "Ese estudiante no está a tu cargo"
-            unidadId == null -> "Elige un ID de unidad válido"
+            else -> ""
+        }
+        val errorUnidad = when {
+            e.unidadIdTexto.isBlank() -> "Ingresa el ID de la unidad"
+            unidadId == null -> "Debe ser un número (ej: 1)"
             e.unidadesAsignables.none { it.id == unidadId } ->
                 "La unidad debe estar AUTORIZADA o PUBLICADA"
-            maxIntentos == null || maxIntentos < 1 -> "maxIntentos debe ser al menos 1"
-            !fechaValida(e.fechaInicio) || !fechaValida(e.fechaFin) ->
-                "Usa fechas AAAA-MM-DD"
-            e.fechaFin < e.fechaInicio -> "La fecha fin no puede ser anterior al inicio"
-            else -> null
+            else -> ""
+        }
+        val errorFechaInicio = when {
+            e.fechaInicio.isBlank() -> "Elige la fecha de inicio"
+            !fechaValida(e.fechaInicio) -> "Usa el formato AAAA-MM-DD"
+            else -> ""
+        }
+        val errorFechaFin = when {
+            e.fechaFin.isBlank() -> "Elige la fecha de fin"
+            !fechaValida(e.fechaFin) -> "Usa el formato AAAA-MM-DD"
+            errorFechaInicio.isEmpty() && e.fechaFin < e.fechaInicio ->
+                "La fecha fin no puede ser anterior al inicio"
+            else -> ""
+        }
+        val errorMaxIntentos = when {
+            e.maxIntentosTexto.isBlank() -> "Ingresa el máximo de intentos"
+            maxIntentos == null -> "Debe ser un número entero"
+            maxIntentos < 1 -> "Debe ser al menos 1"
+            else -> ""
+        }
+        val errorConfirmacion = if (!e.datosConfirmados) {
+            "Debes confirmar que los datos son correctos"
+        } else {
+            ""
         }
 
-        if (error != null) {
-            _estado.update { it.copy(errorFormulario = error) }
-            return
+        _estado.update {
+            it.copy(
+                errorEstudiante = errorEstudiante,
+                errorUnidad = errorUnidad,
+                errorFechaInicio = errorFechaInicio,
+                errorFechaFin = errorFechaFin,
+                errorMaxIntentos = errorMaxIntentos,
+                errorConfirmacion = errorConfirmacion
+            )
         }
+
+        val hayErrores = listOf(
+            errorEstudiante, errorUnidad, errorFechaInicio,
+            errorFechaFin, errorMaxIntentos, errorConfirmacion
+        ).any { it.isNotEmpty() }
+
+        if (hayErrores) return
 
         viewModelScope.launch {
             repositorio.crearAsignacion(
@@ -126,15 +189,20 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
                     unidadId = unidadId!!,
                     fechaInicio = e.fechaInicio,
                     fechaFin = e.fechaFin,
-                    maxIntentos = maxIntentos!!
+                    maxIntentos = maxIntentos!!,
+                    activa = e.asignacionActiva
                 )
             )
             _estado.update {
                 it.copy(
-                    errorFormulario = "",
-                    mensaje = "Asignación creada",
+                    mensaje = if (e.asignacionActiva) {
+                        "Asignación creada y disponible"
+                    } else {
+                        "Asignación creada (no disponible aún)"
+                    },
                     estudianteIdTexto = "",
-                    unidadIdTexto = ""
+                    unidadIdTexto = "",
+                    datosConfirmados = false
                 )
             }
         }
