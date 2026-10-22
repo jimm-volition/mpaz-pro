@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -110,19 +111,32 @@ fun DocenteScreen(
                 Text(estado.mensaje, color = MaterialTheme.colorScheme.primary)
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+           Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("Estudiantes a cargo", style = MaterialTheme.typography.titleMedium)
                     estado.estudiantes.forEach { est ->
-                        Text("- ${est.alias} (id ${est.id}) · ${est.curso}")
+                        OutlinedButton(
+                            onClick = { viewModel.actualizarEstudianteId(est.id.toString()) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Usar ${est.alias} (id ${est.id})")
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+
                     Text("Unidades asignables", style = MaterialTheme.typography.titleMedium)
                     if (estado.unidadesAsignables.isEmpty()) {
                         Text("Ninguna. Pide a UTP autorizar/publicar.")
                     } else {
                         estado.unidadesAsignables.forEach { u ->
-                            Text("- id ${u.id}: ${u.titulo} [${u.estado.name}]")
+                            OutlinedButton(
+                                onClick = { viewModel.actualizarUnidadId(u.id.toString()) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Usar id ${u.id}: ${u.titulo}")
+                            }
                         }
                     }
                 }
