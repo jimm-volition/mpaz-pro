@@ -208,11 +208,11 @@ private fun PreguntaEntity.aModelo() = Pregunta(
 )
 
 private fun AsignacionEntity.aModelo() = Asignacion(
-    id, docenteId, estudianteId, unidadId, fechaInicio, fechaFin, maxIntentos
+    id, docenteId, estudianteId, unidadId, fechaInicio, fechaFin, maxIntentos, activa
 )
 
 private fun Asignacion.aEntity() = AsignacionEntity(
-    id, docenteId, estudianteId, unidadId, fechaInicio, fechaFin, maxIntentos
+    id, docenteId, estudianteId, unidadId, fechaInicio, fechaFin, maxIntentos, activa
 )
 
 private fun IntentoEntity.aModelo() = Intento(
