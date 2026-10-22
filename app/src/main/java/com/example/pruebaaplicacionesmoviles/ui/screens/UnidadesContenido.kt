@@ -36,8 +36,9 @@ fun UnidadesContenido(
         it.id == asignaturaId //Comparacion del id con el recibido en pantalla
     }?.nombre ?: "Asignatura" //Se obtiene el nombre o se muestra Asignatura si no existe pe causa
 
-    val unidadesVisibles = unidades.filter{ it.asignaturaId == asignaturaId} //Filtramos las unidades recibidas y se conservan solo los de la asignatura seleccionada
-
+    val unidadesVisibles = unidades
+        .filter { it.asignaturaId == asignaturaId }
+        .distinctBy { it.id }
     //La estructura principal de la pantalla
     Scaffold(
         containerColor = Color(0xFFF5F8FD), // Color del fondo
@@ -113,9 +114,12 @@ fun UnidadesContenido(
                 )
             }else{ //SI la lista tiene unidades, mostramos las tarjetas de las fakin unidades
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxWidth()
+                        .weight(1f),
+                            contentPadding = PaddingValues(bottom = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+
+
                 ) {
                     items( //ACA GENERAMOS LOS ELEMENTOS DE LA LISTA
                         items = unidadesVisibles, //ACA UTILIZAMOS LAS UNIDADES FILTRADAS

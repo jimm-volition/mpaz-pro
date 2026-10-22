@@ -23,7 +23,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     // ESTO GUARDA LO QUE ESCRIBE EL USUARIO
 
     private val _usuario = MutableStateFlow("") // Almacena el texto del usuario
-    val usuario: StateFlow<String> = _usuario.asStateFlow()
+    val usuario: StateFlow<String> = _usuario.asStateFlow() //ESTA PERMITE OBSERVAR EL TEXTO
 
 
     // ESTO GUARDA EL ROL QUE SELECCIONO EL USUARIO
@@ -52,6 +52,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _usuarioAutenticado = MutableStateFlow<Usuario?>(null)
     val usuarioAutenticado = _usuarioAutenticado.asStateFlow()
 
+
+
+
     fun actualizarUsuario(nuevoTexto: String) {
         _usuario.value = nuevoTexto // Actualiza lo escrito
         _errorUsuario.value = "" // Limpia el error anterior
@@ -71,6 +74,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
         // Validamos que se haya ingresado un usuario
         _errorUsuario.value = when {
+
+
             alias.isBlank() -> "Debes ingresar un usuario"
             alias.length < 4 -> "Debes ingresar mínimo 4 caracteres"
             else -> ""
