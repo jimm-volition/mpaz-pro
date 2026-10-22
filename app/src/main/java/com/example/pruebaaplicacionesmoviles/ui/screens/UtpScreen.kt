@@ -4,6 +4,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -86,7 +92,11 @@ fun UtpScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            AnimatedVisibility(visible = estado.mensaje.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = estado.mensaje.isNotEmpty(),
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut()
+            ) {
                 Text(
                     text = estado.mensaje,
                     color = MaterialTheme.colorScheme.primary,
@@ -127,7 +137,7 @@ private fun UnidadUtpCard(
     onDeshabilitar: () -> Unit,
     onElegirImagen: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(unidad.titulo, style = MaterialTheme.typography.titleMedium)
             Text("OA: ${unidad.codigoOA}")
