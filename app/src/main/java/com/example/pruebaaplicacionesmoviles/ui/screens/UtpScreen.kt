@@ -40,6 +40,17 @@ import com.example.pruebaaplicacionesmoviles.data.model.EstadoUnidad
 import com.example.pruebaaplicacionesmoviles.data.model.Unidad
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazAzul
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazAzulClaro
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazFondo
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazTexto
+import androidx.compose.material3.ButtonDefaults
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,14 +79,30 @@ fun UtpScreen(
     }
 
     Scaffold(
+        containerColor = MpazFondo,
         topBar = {
             TopAppBar(
-                title = { Text("Panel UTP") },
+                title = {
+                    Text(
+                        "Panel UTP",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 actions = {
-                    Button(onClick = onCerrarSesion) {
+                    Button(
+                        onClick = onCerrarSesion,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = MpazAzul
+                        )
+                    ) {
                         Text("Salir")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MpazAzul
+                )
             )
         }
     ) { padding ->
@@ -85,12 +112,28 @@ fun UtpScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Autoriza o publica unidades antes de que el docente las asigne.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MpazAzul),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        "Panel UTP",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Autoriza o publica unidades antes de que el docente las asigne.",
+                        color = MpazAzulClaro
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+Spacer(modifier = Modifier.height(12.dp))
+
 
             AnimatedVisibility(
                 visible = estado.mensaje.isNotEmpty(),
@@ -137,18 +180,26 @@ private fun UnidadUtpCard(
     onDeshabilitar: () -> Unit,
     onElegirImagen: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(unidad.titulo, style = MaterialTheme.typography.titleMedium)
-            Text("OA: ${unidad.codigoOA}")
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                unidad.titulo,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MpazTexto
+            )
+            Text("OA: ${unidad.codigoOA}", color = MpazAzul)
             Text("Estado: ${unidad.estado.name}")
             if (!unidad.imagenReferencia.isNullOrBlank()) {
-                Text(
-                    text = "Imagen: cargada",
-                    color = MaterialTheme.colorScheme.secondary
-                )
+                Text("Imagen: cargada", color = MpazAzul)
             }
-
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
