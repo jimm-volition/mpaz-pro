@@ -247,51 +247,13 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Rol.UTP -> {
-
-                        var mostrarUtpRemoto by remember {
-                            mutableStateOf(false)
-                        }
-
-                        if (mostrarUtpRemoto) {
-
-                            UtpContenidoRemotoScreen(
-                                viewModel = utpContenidosViewModel,
-                                onVolver = {
-                                    mostrarUtpRemoto = false
-                                }
-                            )
-
-                        } else {
-
-                            Column(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-
-                                Button(
-                                    onClick = {
-                                        mostrarUtpRemoto = true
-                                    },
-                                    modifier = Modifier
-                                        .statusBarsPadding()
-                                        .padding(8.dp)
-                                ) {
-                                    Text("Gestionar contenidos en servidor")
-                                }
-
-                                Box(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    UtpScreen(
-                                        viewModel = utpViewModel,
-                                        onCerrarSesion = {
-                                            contenidoViewModel.limpiar()
-                                            utpContenidosViewModel.limpiar()
-                                            loginViewModel.cerrarSesion()
-                                        }
-                                    )
-                                }
+                        UtpContenidoRemotoScreen(
+                            viewModel = utpContenidosViewModel,
+                            onVolver = {
+                                utpContenidosViewModel.limpiar()
+                                loginViewModel.cerrarSesion()
                             }
-                        }
+                        )
                     }
                 }
             }

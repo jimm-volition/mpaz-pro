@@ -3,14 +3,17 @@ package com.example.pruebaaplicacionesmoviles.core.network
 
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -24,6 +27,13 @@ interface UtpContenidoApi {
         @Query("asignaturaId") asignaturaId: Int,
         @Query("estado") estado: String? = null
     ): JsonElement
+
+
+    @POST("utp/contenidos/{id}/transiciones")
+    suspend fun transicionarContenido(
+        @Path("id") id: Int,
+        @Body datos: JsonObject
+    ): Response<JsonElement>
 
     @POST("utp/unidades")
     suspend fun crearUnidad(
@@ -79,6 +89,20 @@ interface UtpContenidoApi {
         @Path("id") id: Int,
         @Body datos: JsonObject
     ): Response<JsonElement>
+
+    @Multipart
+    @POST("utp/recursos")
+    suspend fun subirRecurso(
+        @Part archivo: MultipartBody.Part
+    ): Response<JsonObject>
+}
+
+interface UtpHistorialApi {
+
+    @GET("utp/unidades/{id}/historial")
+    suspend fun historialUnidad(
+        @Path("id") unidadId: Int
+    ): JsonElement
 }
 
 object UtpContenidoApiCliente {
@@ -110,4 +134,11 @@ object UtpContenidoApiCliente {
         .addConverterFactory(GsonConverterFactory.create())
         .build()
         .create(UtpContenidoApi::class.java)
+
+    val historial: UtpHistorialApi = Retrofit.Builder()
+        .baseUrl("http://127.0.0.1:8081/api/v1/")
+        .client(cliente)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(UtpHistorialApi::class.java)
 }

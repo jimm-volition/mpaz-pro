@@ -1,55 +1,56 @@
-
 package com.example.pruebaaplicacionesmoviles.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pruebaaplicacionesmoviles.data.model.Asignatura
 import com.example.pruebaaplicacionesmoviles.data.repository.UtpContenidoRepository
-import com.example.pruebaaplicacionesmoviles.data.repository.UtpMaterial
-import com.example.pruebaaplicacionesmoviles.data.repository.UtpObjetivo
 import com.example.pruebaaplicacionesmoviles.data.repository.UtpUnidad
+import com.example.pruebaaplicacionesmoviles.data.repository.UtpObjetivo
+import com.example.pruebaaplicacionesmoviles.data.repository.UtpMaterial
+import com.example.pruebaaplicacionesmoviles.data.repository.UtpHistorial
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
+import com.example.pruebaaplicacionesmoviles.data.repository.EstadoMaterialRepository
 data class UtpContenidosEstado(
     val asignaturas: List<Asignatura> = emptyList(),
     val unidades: List<UtpUnidad> = emptyList(),
     val objetivos: List<UtpObjetivo> = emptyList(),
     val materiales: List<UtpMaterial> = emptyList(),
+    val historial: List<UtpHistorial> = emptyList(),
     val cargando: Boolean = false,
     val guardando: Boolean = false,
+    val subiendoArchivo: Boolean = false,
+    val imagenSubida: String? = null,
+    val audioSubido: String? = null,
     val error: String? = null,
     val mensaje: String? = null
 )
 
-class UtpContenidosViewModel : ViewModel() {
-
-    private val repositorio = UtpContenidoRepository()
-
+// @JvmOverloads conserva el constructor (Application) usado por Android.
+// Los repositorios opcionales permiten inyectar simulaciones en las pruebas unitarias.
+class UtpContenidosViewModel @JvmOverloads constructor(
+    application: Application,
+    private val repositorio: UtpContenidoRepository = UtpContenidoRepository(),
+    private val repositorioEstados: EstadoMaterialRepository = EstadoMaterialRepository()
+) : AndroidViewModel(application) {
     private val _estado = MutableStateFlow(UtpContenidosEstado())
-
     val estado = _estado.asStateFlow()
 
     fun cargarAsignaturas() {
-
         viewModelScope.launch {
-
-            _estado.value = _estado.value.copy(
-                cargando = true,
-                error = null
-            )
+            iniciarCarga()
 
             try {
-
                 val datos = repositorio.obtenerAsignaturas()
 
                 _estado.value = _estado.value.copy(
                     asignaturas = datos,
                     cargando = false
                 )
-
             } catch (e: Exception) {
                 mostrarError(e)
             }
@@ -57,28 +58,22 @@ class UtpContenidosViewModel : ViewModel() {
     }
 
     fun cargarUnidades(asignaturaId: Int) {
-
         viewModelScope.launch {
+            iniciarCarga()
 
             _estado.value = _estado.value.copy(
-                cargando = true,
-                error = null,
                 unidades = emptyList(),
                 objetivos = emptyList(),
-                materiales = emptyList()
+                materiales = emptyList(),
+                historial = emptyList()
             )
 
             try {
-
-                val datos = repositorio.obtenerUnidades(
-                    asignaturaId
-                )
+                actualizarUnidades(asignaturaId)
 
                 _estado.value = _estado.value.copy(
-                    unidades = datos,
                     cargando = false
                 )
-
             } catch (e: Exception) {
                 mostrarError(e)
             }
@@ -86,27 +81,20 @@ class UtpContenidosViewModel : ViewModel() {
     }
 
     fun cargarObjetivos(unidadId: Int) {
-
         viewModelScope.launch {
+            iniciarCarga()
 
             _estado.value = _estado.value.copy(
-                cargando = true,
-                error = null,
                 objetivos = emptyList(),
                 materiales = emptyList()
             )
 
             try {
-
-                val datos = repositorio.obtenerObjetivos(
-                    unidadId
-                )
+                actualizarObjetivos(unidadId)
 
                 _estado.value = _estado.value.copy(
-                    objetivos = datos,
                     cargando = false
                 )
-
             } catch (e: Exception) {
                 mostrarError(e)
             }
@@ -114,26 +102,42 @@ class UtpContenidosViewModel : ViewModel() {
     }
 
     fun cargarMateriales(objetivoId: Int) {
-
         viewModelScope.launch {
+            iniciarCarga()
 
             _estado.value = _estado.value.copy(
-                cargando = true,
-                error = null,
                 materiales = emptyList()
             )
 
             try {
+                actualizarMateriales(objetivoId)
 
-                val datos = repositorio.obtenerMateriales(
-                    objetivoId
+                _estado.value = _estado.value.copy(
+                    cargando = false
+                )
+            } catch (e: Exception) {
+                mostrarError(e)
+            }
+        }
+    }
+
+    fun cargarHistorial(unidadId: Int) {
+        viewModelScope.launch {
+            iniciarCarga()
+
+            _estado.value = _estado.value.copy(
+                historial = emptyList()
+            )
+
+            try {
+                val datos = repositorio.obtenerHistorial(
+                    unidadId
                 )
 
                 _estado.value = _estado.value.copy(
-                    materiales = datos,
+                    historial = datos,
                     cargando = false
                 )
-
             } catch (e: Exception) {
                 mostrarError(e)
             }
@@ -145,40 +149,24 @@ class UtpContenidosViewModel : ViewModel() {
         titulo: String,
         orden: Int
     ) {
-
         if (titulo.isBlank() || orden < 1) {
-            _estado.value = _estado.value.copy(
-                error = "Ingresa un título y un orden válido"
-            )
+            errorValidacion("Ingresa un título y un orden válido")
             return
         }
 
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Unidad creada correctamente",
+            accion = {
                 repositorio.crearUnidad(
                     asignaturaId,
                     titulo.trim(),
                     orden
                 )
-
-                val actualizadas = repositorio.obtenerUnidades(
-                    asignaturaId
-                )
-
-                _estado.value = _estado.value.copy(
-                    unidades = actualizadas,
-                    guardando = false,
-                    mensaje = "Unidad creada correctamente"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarUnidades(asignaturaId)
             }
-        }
+        )
     }
 
     fun editarUnidad(
@@ -187,41 +175,25 @@ class UtpContenidosViewModel : ViewModel() {
         titulo: String,
         orden: Int
     ) {
-
         if (titulo.isBlank() || orden < 1) {
-            _estado.value = _estado.value.copy(
-                error = "Ingresa un título y un orden válido"
-            )
+            errorValidacion("Ingresa un título y un orden válido")
             return
         }
 
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Unidad actualizada correctamente",
+            accion = {
                 repositorio.editarUnidad(
                     id,
                     asignaturaId,
                     titulo.trim(),
                     orden
                 )
-
-                val actualizadas = repositorio.obtenerUnidades(
-                    asignaturaId
-                )
-
-                _estado.value = _estado.value.copy(
-                    unidades = actualizadas,
-                    guardando = false,
-                    mensaje = "Unidad actualizada correctamente"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarUnidades(asignaturaId)
             }
-        }
+        )
     }
 
     fun crearObjetivo(
@@ -230,45 +202,29 @@ class UtpContenidosViewModel : ViewModel() {
         descripcion: String,
         orden: Int
     ) {
-
         if (
             codigo.isBlank() ||
             descripcion.isBlank() ||
             orden < 1
         ) {
-            _estado.value = _estado.value.copy(
-                error = "Completa los campos del objetivo"
-            )
+            errorValidacion("Completa los datos del objetivo")
             return
         }
 
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Objetivo creado correctamente",
+            accion = {
                 repositorio.crearObjetivo(
                     unidadId,
                     codigo.trim(),
                     descripcion.trim(),
                     orden
                 )
-
-                val actualizados = repositorio.obtenerObjetivos(
-                    unidadId
-                )
-
-                _estado.value = _estado.value.copy(
-                    objetivos = actualizados,
-                    guardando = false,
-                    mensaje = "Objetivo creado correctamente"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarObjetivos(unidadId)
             }
-        }
+        )
     }
 
     fun editarObjetivo(
@@ -278,24 +234,18 @@ class UtpContenidosViewModel : ViewModel() {
         descripcion: String,
         orden: Int
     ) {
-
         if (
             codigo.isBlank() ||
             descripcion.isBlank() ||
             orden < 1
         ) {
-            _estado.value = _estado.value.copy(
-                error = "Completa los campos del objetivo"
-            )
+            errorValidacion("Completa los datos del objetivo")
             return
         }
 
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Objetivo actualizado correctamente",
+            accion = {
                 repositorio.editarObjetivo(
                     id,
                     unidadId,
@@ -303,21 +253,11 @@ class UtpContenidosViewModel : ViewModel() {
                     descripcion.trim(),
                     orden
                 )
-
-                val actualizados = repositorio.obtenerObjetivos(
-                    unidadId
-                )
-
-                _estado.value = _estado.value.copy(
-                    objetivos = actualizados,
-                    guardando = false,
-                    mensaje = "Objetivo actualizado correctamente"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarObjetivos(unidadId)
             }
-        }
+        )
     }
 
     fun cambiarEstadoUnidad(
@@ -325,32 +265,18 @@ class UtpContenidosViewModel : ViewModel() {
         asignaturaId: Int,
         estadoNuevo: String
     ) {
-
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Unidad actualizada a $estadoNuevo",
+            accion = {
                 repositorio.cambiarEstadoUnidad(
                     unidadId,
                     estadoNuevo
                 )
-
-                val unidades = repositorio.obtenerUnidades(
-                    asignaturaId
-                )
-
-                _estado.value = _estado.value.copy(
-                    unidades = unidades,
-                    guardando = false,
-                    mensaje = "Estado actualizado a $estadoNuevo"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarUnidades(asignaturaId)
             }
-        }
+        )
     }
 
     fun cambiarEstadoObjetivo(
@@ -358,32 +284,18 @@ class UtpContenidosViewModel : ViewModel() {
         unidadId: Int,
         estadoNuevo: String
     ) {
-
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Objetivo actualizado a $estadoNuevo",
+            accion = {
                 repositorio.cambiarEstadoObjetivo(
                     objetivoId,
                     estadoNuevo
                 )
-
-                val objetivos = repositorio.obtenerObjetivos(
-                    unidadId
-                )
-
-                _estado.value = _estado.value.copy(
-                    objetivos = objetivos,
-                    guardando = false,
-                    mensaje = "Objetivo actualizado a $estadoNuevo"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarObjetivos(unidadId)
             }
-        }
+        )
     }
 
     fun crearMaterial(
@@ -394,52 +306,39 @@ class UtpContenidosViewModel : ViewModel() {
         instrucciones: String,
         orden: Int,
         responsableOrigen: String,
-        licencia: String
+        licencia: String,
+        imagenes: List<String> = emptyList(),
+        audio: String? = null
     ) {
-
-        if (
-            titulo.isBlank() ||
-            responsableOrigen.isBlank() ||
-            licencia.isBlank() ||
-            orden < 0
-        ) {
-            _estado.value = _estado.value.copy(
-                error = "Completa título, autoría y licencia"
+        if (!materialValido(
+                titulo,
+                responsableOrigen,
+                licencia,
+                orden
             )
-            return
-        }
+        ) return
 
-        viewModelScope.launch {
-
-            iniciarGuardado()
-
-            try {
-
+        ejecutarGuardado(
+            mensaje = "Material creado correctamente",
+            accion = {
                 repositorio.crearMaterial(
-                    objetivoId = objetivoId,
-                    titulo = titulo.trim(),
-                    explicacion = explicacion.trim(),
-                    ejemplo = ejemplo.trim(),
-                    instrucciones = instrucciones.trim(),
-                    orden = orden,
-                    responsableOrigen = responsableOrigen.trim(),
-                    licencia = licencia.trim()
+                    objetivoId,
+                    titulo.trim(),
+                    explicacion.trim(),
+                    ejemplo.trim(),
+                    instrucciones.trim(),
+                    orden,
+                    responsableOrigen.trim(),
+                    licencia.trim(),
+                    imagenes,
+                    audio
                 )
-
-                val materiales = repositorio.obtenerMateriales(
-                    objetivoId
-                )
-
-                _estado.value = _estado.value.copy(
-                    materiales = materiales,
-                    guardando = false,
-                    mensaje = "Material creado correctamente"
-                )
-
-            } catch (e: Exception) {
-                mostrarError(e)
+            },
+            refrescar = {
+                actualizarMateriales(objetivoId)
+                limpiarSubidas()
             }
-        }
+        )
     }
 
     fun editarMaterial(
@@ -451,37 +350,223 @@ class UtpContenidosViewModel : ViewModel() {
         instrucciones: String,
         orden: Int,
         responsableOrigen: String,
-        licencia: String
+        licencia: String,
+        imagenes: List<String>,
+        audio: String?
     ) {
+        if (!materialValido(
+                titulo,
+                responsableOrigen,
+                licencia,
+                orden
+            )
+        ) return
 
+        ejecutarGuardado(
+            mensaje = "Material actualizado correctamente",
+            accion = {
+                repositorio.editarMaterial(
+                    id,
+                    objetivoId,
+                    titulo.trim(),
+                    explicacion.trim(),
+                    ejemplo.trim(),
+                    instrucciones.trim(),
+                    orden,
+                    responsableOrigen.trim(),
+                    licencia.trim(),
+                    imagenes,
+                    audio
+                )
+            },
+            refrescar = {
+                actualizarMateriales(objetivoId)
+                limpiarSubidas()
+            }
+        )
+    }
+
+    fun subirImagen(uri: Uri) {
+        subirArchivo(uri, esImagen = true)
+    }
+
+    fun subirAudio(uri: Uri) {
+        subirArchivo(uri, esImagen = false)
+    }
+
+    private fun subirArchivo(
+        uri: Uri,
+        esImagen: Boolean
+    ) {
+        viewModelScope.launch {
+
+            _estado.value = _estado.value.copy(
+                subiendoArchivo = true,
+                error = null,
+                mensaje = null
+            )
+
+            try {
+                val ruta = repositorio.subirArchivo(
+                    getApplication<Application>(),
+                    uri
+                )
+
+                _estado.value = if (esImagen) {
+                    _estado.value.copy(
+                        subiendoArchivo = false,
+                        imagenSubida = ruta,
+                        mensaje = "Imagen subida correctamente"
+                    )
+                } else {
+                    _estado.value.copy(
+                        subiendoArchivo = false,
+                        audioSubido = ruta,
+                        mensaje = "Audio subido correctamente"
+                    )
+                }
+
+            } catch (e: Exception) {
+                mostrarError(e)
+            }
+        }
+    }
+
+    fun limpiarSubidas() {
+        _estado.value = _estado.value.copy(
+            imagenSubida = null,
+            audioSubido = null
+        )
+    }
+
+    private fun materialValido(
+        titulo: String,
+        responsable: String,
+        licencia: String,
+        orden: Int
+    ): Boolean {
         if (
             titulo.isBlank() ||
-            responsableOrigen.isBlank() ||
+            responsable.isBlank() ||
             licencia.isBlank() ||
             orden < 0
         ) {
-            _estado.value = _estado.value.copy(
-                error = "Completa título, autoría y licencia"
+            errorValidacion(
+                "Completa título, responsable, licencia y orden"
             )
-            return
+            return false
         }
 
+        return true
+    }
+
+    private fun errorValidacion(mensaje: String) {
+        _estado.value = _estado.value.copy(
+            error = mensaje,
+            mensaje = null
+        )
+    }
+
+    private fun iniciarCarga() {
+        _estado.value = _estado.value.copy(
+            cargando = true,
+            error = null
+        )
+    }
+
+    private fun ejecutarGuardado(
+        mensaje: String,
+        accion: suspend () -> Unit,
+        refrescar: suspend () -> Unit
+    ) {
         viewModelScope.launch {
 
-            iniciarGuardado()
+            _estado.value = _estado.value.copy(
+                guardando = true,
+                error = null,
+                mensaje = null
+            )
 
             try {
+                accion()
+                refrescar()
 
-                repositorio.editarMaterial(
-                    id = id,
-                    objetivoId = objetivoId,
-                    titulo = titulo.trim(),
-                    explicacion = explicacion.trim(),
-                    ejemplo = ejemplo.trim(),
-                    instrucciones = instrucciones.trim(),
-                    orden = orden,
-                    responsableOrigen = responsableOrigen.trim(),
-                    licencia = licencia.trim()
+                _estado.value = _estado.value.copy(
+                    guardando = false,
+                    mensaje = mensaje
+                )
+
+            } catch (e: Exception) {
+                mostrarError(e)
+            }
+        }
+    }
+
+    private suspend fun actualizarUnidades(
+        asignaturaId: Int
+    ) {
+        val unidades = repositorio.obtenerUnidades(asignaturaId)
+
+        _estado.value = _estado.value.copy(
+            unidades = unidades
+        )
+    }
+
+    private suspend fun actualizarObjetivos(
+        unidadId: Int
+    ) {
+        val objetivos = repositorio.obtenerObjetivos(unidadId)
+
+        _estado.value = _estado.value.copy(
+            objetivos = objetivos
+        )
+    }
+
+    private suspend fun actualizarMateriales(
+        objetivoId: Int
+    ) {
+        val materiales = repositorio.obtenerMateriales(objetivoId)
+
+        _estado.value = _estado.value.copy(
+            materiales = materiales
+        )
+    }
+
+    private fun mostrarError(e: Exception) {
+        if (e is CancellationException) {
+            throw e
+        }
+
+        _estado.value = _estado.value.copy(
+            cargando = false,
+            guardando = false,
+            subiendoArchivo = false,
+            error = e.localizedMessage
+                ?: "Error de comunicación con el servidor"
+        )
+    }
+
+    fun limpiar() {
+        _estado.value = UtpContenidosEstado()
+    }
+
+
+    fun cambiarEstadoMaterial(
+        materialId: Int,
+        objetivoId: Int,
+        estadoNuevo: String
+    ) {
+        viewModelScope.launch {
+            _estado.value = _estado.value.copy(
+                guardando = true,
+                error = null,
+                mensaje = null
+            )
+
+            try {
+                repositorioEstados.cambiarEstado(
+                    materialId,
+                    estadoNuevo
                 )
 
                 val materiales = repositorio.obtenerMateriales(
@@ -491,7 +576,7 @@ class UtpContenidosViewModel : ViewModel() {
                 _estado.value = _estado.value.copy(
                     materiales = materiales,
                     guardando = false,
-                    mensaje = "Material actualizado correctamente"
+                    mensaje = "Material actualizado a $estadoNuevo"
                 )
 
             } catch (e: Exception) {
@@ -500,30 +585,4 @@ class UtpContenidosViewModel : ViewModel() {
         }
     }
 
-    private fun iniciarGuardado() {
-
-        _estado.value = _estado.value.copy(
-            guardando = true,
-            error = null,
-            mensaje = null
-        )
-    }
-
-    private fun mostrarError(e: Exception) {
-
-        if (e is CancellationException) {
-            throw e
-        }
-
-        _estado.value = _estado.value.copy(
-            cargando = false,
-            guardando = false,
-            error = e.localizedMessage
-                ?: "Error de comunicación con el servidor"
-        )
-    }
-
-    fun limpiar() {
-        _estado.value = UtpContenidosEstado()
-    }
 }
