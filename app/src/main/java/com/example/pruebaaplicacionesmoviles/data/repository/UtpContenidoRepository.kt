@@ -1,11 +1,21 @@
 
 package com.example.pruebaaplicacionesmoviles.data.repository
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.example.pruebaaplicacionesmoviles.core.network.UtpContenidoApiCliente
+import com.example.pruebaaplicacionesmoviles.core.network.UtpContenidoApi
+import com.example.pruebaaplicacionesmoviles.core.network.UtpHistorialApi
 import com.example.pruebaaplicacionesmoviles.data.model.Asignatura
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import retrofit2.Response
 
 data class UtpUnidad(
@@ -21,97 +31,130 @@ data class UtpObjetivo(
     val unidadId: Int,
     val codigo: String,
     val descripcion: String,
-    val estado: String
+    val estado: String,
+    val orden: Int
 )
 
 data class UtpMaterial(
     val id: Int,
     val titulo: String,
-    val estado: String
+    val estado: String,
+    val explicacion: String,
+    val ejemplo: String,
+    val instrucciones: String,
+    val orden: Int,
+    val responsableOrigen: String,
+    val licencia: String,
+    val imagenes: List<String>,
+    val audio: String?
 )
 
-class UtpContenidoRepository {
+data class UtpHistorial(
+    val estadoAnterior: String,
+    val estadoNuevo: String,
+    val creadoEn: String,
+    val usuarioId: Int,
+    val tipoRecurso: String
+)
 
-    private val api = UtpContenidoApiCliente.servicio
+class UtpContenidoRepository(
+    private val api: UtpContenidoApi = UtpContenidoApiCliente.servicio,
+    private val apiHistorial: UtpHistorialApi = UtpContenidoApiCliente.historial
+) {
 
-    suspend fun obtenerAsignaturas(): List<Asignatura> {
-        return api.listarAsignaturas()
-            .lista()
-            .map { elemento ->
+    suspend fun obtenerAsignaturas(): List<Asignatura> =
+        api.listarAsignaturas().lista().map { elemento ->
+            val dato = elemento.asJsonObject
 
-                val dato = elemento.asJsonObject
-
-                Asignatura(
-                    id = dato.get("id").asInt,
-                    nombre = dato.get("nombre").asString
-                )
-            }
-    }
+            Asignatura(
+                id = dato.get("id").asInt,
+                nombre = dato.texto("nombre")
+            )
+        }
 
     suspend fun obtenerUnidades(
         asignaturaId: Int
-    ): List<UtpUnidad> {
+    ): List<UtpUnidad> =
+        api.listarUnidades(asignaturaId).lista().map { elemento ->
+            val dato = elemento.asJsonObject
 
-        return api.listarUnidades(asignaturaId)
-            .lista()
-            .map { elemento ->
-
-                val dato = elemento.asJsonObject
-
-                UtpUnidad(
-                    id = dato.get("id").asInt,
-                    asignaturaId = dato.get("asignaturaId").asInt,
-                    titulo = dato.texto("titulo"),
-                    orden = dato.entero("orden"),
-                    estado = dato.texto("estado")
-                )
-            }
-    }
+            UtpUnidad(
+                id = dato.get("id").asInt,
+                asignaturaId = dato.entero("asignaturaId"),
+                titulo = dato.texto("titulo"),
+                orden = dato.entero("orden"),
+                estado = dato.texto("estado")
+            )
+        }
 
     suspend fun obtenerObjetivos(
         unidadId: Int
-    ): List<UtpObjetivo> {
+    ): List<UtpObjetivo> =
+        api.listarObjetivos(unidadId).lista().map { elemento ->
+            val dato = elemento.asJsonObject
 
-        return api.listarObjetivos(unidadId)
-            .lista()
-            .map { elemento ->
-
-                val dato = elemento.asJsonObject
-
-                UtpObjetivo(
-                    id = dato.get("id").asInt,
-                    unidadId = unidadId,
-                    codigo = dato.texto("codigo"),
-                    descripcion = dato.texto("descripcion"),
-                    estado = dato.texto("estado")
-                )
-            }
-    }
+            UtpObjetivo(
+                id = dato.get("id").asInt,
+                unidadId = unidadId,
+                codigo = dato.texto("codigo"),
+                descripcion = dato.texto("descripcion"),
+                estado = dato.texto("estado"),
+                orden = dato.entero("orden")
+            )
+        }
 
     suspend fun obtenerMateriales(
         objetivoId: Int
-    ): List<UtpMaterial> {
+    ): List<UtpMaterial> =
+        api.listarContenidos(objetivoId).lista().map { elemento ->
+            val dato = elemento.asJsonObject
 
-        return api.listarContenidos(objetivoId)
+            val imagenes = dato.get("imagenes")
+                ?.takeIf { it.isJsonArray }
+                ?.asJsonArray
+                ?.mapNotNull { imagen ->
+                    imagen.takeUnless { it.isJsonNull }?.asString
+                }
+                ?: emptyList()
+
+            UtpMaterial(
+                id = dato.get("id").asInt,
+                titulo = dato.texto("titulo"),
+                estado = dato.texto("estado"),
+                explicacion = dato.texto("explicacionEscrita"),
+                ejemplo = dato.texto("ejemplosGuiados"),
+                instrucciones = dato.texto("instrucciones"),
+                orden = dato.entero("orden"),
+                responsableOrigen = dato.texto("responsableOrigen"),
+                licencia = dato.texto("licencia"),
+                imagenes = imagenes,
+                audio = dato.texto("archivoAudio")
+                    .takeIf { it.isNotBlank() }
+            )
+        }
+
+    suspend fun obtenerHistorial(
+        unidadId: Int
+    ): List<UtpHistorial> =
+        apiHistorial.historialUnidad(unidadId)
             .lista()
             .map { elemento ->
-
                 val dato = elemento.asJsonObject
 
-                UtpMaterial(
-                    id = dato.get("id").asInt,
-                    titulo = dato.texto("titulo"),
-                    estado = dato.texto("estado")
+                UtpHistorial(
+                    estadoAnterior = dato.texto("estadoAnterior"),
+                    estadoNuevo = dato.texto("estadoNuevo"),
+                    creadoEn = dato.texto("creadoEn"),
+                    usuarioId = dato.entero("usuarioId"),
+                    tipoRecurso = dato.texto("tipoRecurso")
                 )
             }
-    }
 
     suspend fun crearUnidad(
         asignaturaId: Int,
         titulo: String,
         orden: Int
     ) {
-
         val datos = JsonObject().apply {
             addProperty("asignaturaId", asignaturaId)
             addProperty("titulo", titulo)
@@ -127,7 +170,6 @@ class UtpContenidoRepository {
         titulo: String,
         orden: Int
     ) {
-
         val datos = JsonObject().apply {
             addProperty("asignaturaId", asignaturaId)
             addProperty("titulo", titulo)
@@ -143,7 +185,6 @@ class UtpContenidoRepository {
         descripcion: String,
         orden: Int
     ) {
-
         val datos = JsonObject().apply {
             addProperty("unidadId", unidadId)
             addProperty("codigo", codigo)
@@ -161,7 +202,6 @@ class UtpContenidoRepository {
         descripcion: String,
         orden: Int
     ) {
-
         val datos = JsonObject().apply {
             addProperty("unidadId", unidadId)
             addProperty("codigo", codigo)
@@ -176,30 +216,22 @@ class UtpContenidoRepository {
         unidadId: Int,
         estadoNuevo: String
     ) {
-
         val datos = JsonObject().apply {
             addProperty("estadoNuevo", estadoNuevo)
         }
 
-        api.transicionarUnidad(
-            unidadId,
-            datos
-        ).verificar()
+        api.transicionarUnidad(unidadId, datos).verificar()
     }
 
     suspend fun cambiarEstadoObjetivo(
         objetivoId: Int,
         estadoNuevo: String
     ) {
-
         val datos = JsonObject().apply {
             addProperty("estadoNuevo", estadoNuevo)
         }
 
-        api.transicionarObjetivo(
-            objetivoId,
-            datos
-        ).verificar()
+        api.transicionarObjetivo(objetivoId, datos).verificar()
     }
 
     suspend fun crearMaterial(
@@ -210,44 +242,22 @@ class UtpContenidoRepository {
         instrucciones: String,
         orden: Int,
         responsableOrigen: String,
-        licencia: String
+        licencia: String,
+        imagenes: List<String> = emptyList(),
+        audio: String? = null
     ) {
-
-        val datos = JsonObject().apply {
-
-            addProperty(
-                "objetivoAprendizajeId",
-                objetivoId
-            )
-
-            addProperty("titulo", titulo)
-
-            addProperty(
-                "explicacionEscrita",
-                explicacion
-            )
-
-            addProperty(
-                "ejemplosGuiados",
-                ejemplo
-            )
-
-            addProperty(
-                "instrucciones",
-                instrucciones
-            )
-
-            addProperty("orden", orden)
-
-            addProperty(
-                "responsableOrigen",
-                responsableOrigen
-            )
-
-            addProperty("licencia", licencia)
-
-            add("imagenes", JsonArray())
-        }
+        val datos = datosMaterial(
+            objetivoId,
+            titulo,
+            explicacion,
+            ejemplo,
+            instrucciones,
+            orden,
+            responsableOrigen,
+            licencia,
+            imagenes,
+            audio
+        )
 
         api.crearContenido(datos).verificar()
     }
@@ -261,80 +271,155 @@ class UtpContenidoRepository {
         instrucciones: String,
         orden: Int,
         responsableOrigen: String,
-        licencia: String
+        licencia: String,
+        imagenes: List<String>,
+        audio: String?
     ) {
-
-        val datos = JsonObject().apply {
-
-            addProperty(
-                "objetivoAprendizajeId",
-                objetivoId
-            )
-
-            addProperty("titulo", titulo)
-
-            addProperty(
-                "explicacionEscrita",
-                explicacion
-            )
-
-            addProperty(
-                "ejemplosGuiados",
-                ejemplo
-            )
-
-            addProperty("instrucciones", instrucciones)
-
-            addProperty("orden", orden)
-
-            addProperty(
-                "responsableOrigen",
-                responsableOrigen
-            )
-
-            addProperty("licencia", licencia)
-        }
+        val datos = datosMaterial(
+            objetivoId,
+            titulo,
+            explicacion,
+            ejemplo,
+            instrucciones,
+            orden,
+            responsableOrigen,
+            licencia,
+            imagenes,
+            audio
+        )
 
         api.editarContenido(id, datos).verificar()
     }
-}
 
-private fun JsonElement.lista(): List<JsonElement> {
+    private fun datosMaterial(
+        objetivoId: Int,
+        titulo: String,
+        explicacion: String,
+        ejemplo: String,
+        instrucciones: String,
+        orden: Int,
+        responsableOrigen: String,
+        licencia: String,
+        imagenes: List<String>,
+        audio: String?
+    ): JsonObject =
+        JsonObject().apply {
+            addProperty("objetivoAprendizajeId", objetivoId)
+            addProperty("titulo", titulo)
+            addProperty("explicacionEscrita", explicacion)
+            addProperty("ejemplosGuiados", ejemplo)
+            addProperty("instrucciones", instrucciones)
+            addProperty("orden", orden)
+            addProperty("responsableOrigen", responsableOrigen)
+            addProperty("licencia", licencia)
 
-    return when {
+            val listaImagenes = JsonArray()
 
-        isJsonArray -> asJsonArray.toList()
+            imagenes.forEach { ruta ->
+                listaImagenes.add(ruta)
+            }
 
-        isJsonObject && asJsonObject.has("items") ->
-            asJsonObject
-                .getAsJsonArray("items")
-                .toList()
+            add("imagenes", listaImagenes)
+            addProperty("archivoAudio", audio)
+        }
 
-        isJsonObject && asJsonObject.has("value") ->
-            asJsonObject
-                .getAsJsonArray("value")
-                .toList()
+    suspend fun subirArchivo(
+        context: Context,
+        uri: Uri
+    ): String = withContext(Dispatchers.IO) {
 
-        else -> error("Formato de lista desconocido")
+        val resolver = context.contentResolver
+
+        val nombre = resolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                cursor.getString(0)
+            } else {
+                null
+            }
+        } ?: "recurso"
+
+        val nombreSeguro = nombre
+            .substringAfterLast("/")
+            .substringAfterLast("\\")
+            .take(120)
+
+        val tipo = resolver.getType(uri)
+            ?: "application/octet-stream"
+
+        val bytes = resolver.openInputStream(uri)?.use {
+            it.readBytes()
+        } ?: error("No se pudo abrir el archivo")
+
+        require(bytes.isNotEmpty()) {
+            "El archivo estÃƒÂ¡ vacÃƒÂ­o"
+        }
+
+        require(bytes.size <= 15 * 1024 * 1024) {
+            "El archivo supera los 15 MB"
+        }
+
+        val cuerpo = bytes.toRequestBody(
+            tipo.toMediaTypeOrNull()
+        )
+
+        val parte = MultipartBody.Part.createFormData(
+            "archivo",
+            nombreSeguro,
+            cuerpo
+        )
+
+        val respuesta = api.subirRecurso(parte).verificar()
+
+        val ruta = respuesta.get("url")
+            ?.takeUnless { it.isJsonNull }
+            ?.asString
+            ?: error("El servidor no devolviÃƒÂ³ la URL")
+
+        require(ruta.startsWith("/api/v1/recursos/")) {
+            "El servidor devolviÃƒÂ³ una ruta no vÃƒÂ¡lida"
+        }
+
+        ruta
     }
 }
 
-private fun JsonObject.texto(nombre: String): String =
-    get(nombre)
+private fun JsonElement.lista(): List<JsonElement> =
+    when {
+        isJsonArray -> asJsonArray.toList()
+
+        isJsonObject && asJsonObject.has("items") ->
+            asJsonObject.getAsJsonArray("items").toList()
+
+        isJsonObject && asJsonObject.has("value") ->
+            asJsonObject.getAsJsonArray("value").toList()
+
+        else -> error("Formato JSON inesperado")
+    }
+
+private fun JsonObject.texto(campo: String): String =
+    get(campo)
         ?.takeUnless { it.isJsonNull }
         ?.asString
         .orEmpty()
 
-private fun JsonObject.entero(nombre: String): Int =
-    get(nombre)
+private fun JsonObject.entero(campo: String): Int =
+    get(campo)
         ?.takeUnless { it.isJsonNull }
         ?.asInt ?: 0
 
-private fun Response<JsonElement>.verificar() {
-
+private fun <T> Response<T>.verificar(): T {
     if (!isSuccessful) {
         throw IllegalStateException(
-            "El servidor rechazó la operación (HTTP ${code()})"
+            "Error HTTP ${code()}: operaciÃƒÂ³n rechazada"
         )
     }
+
+    return body()
+        ?: error("El servidor no devolviÃƒÂ³ una respuesta")
 }
