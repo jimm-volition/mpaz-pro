@@ -13,6 +13,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+import coil.request.ImageRequest
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -242,14 +246,12 @@ fun UnidadDetalleScreen(
                             material.ejemplo.isNotBlank() &&
                             material.ejemplo != unidad.ejemploGuiado
                         ) {
-                            Text("Ejemplo: ${material.ejemplo}")
+                            Text("Ejemplo: ${textoMaterialCompacto(material.ejemplo)}")
                             Spacer(Modifier.height(8.dp))
                         }
 
                         if (material.instrucciones.isNotBlank()) {
-                            Text(
-                                "Instrucciones: ${material.instrucciones}"
-                            )
+                            Text("Instrucciones: ${textoMaterialCompacto(material.instrucciones)}")
                             Spacer(Modifier.height(8.dp))
                         }
 
@@ -273,8 +275,69 @@ fun UnidadDetalleScreen(
     }
 }
 
+/** Evita enviar URLs completas de Wikimedia al descargador de recursos locales. */
 @Composable
 private fun ImagenRemota(
+    ruta: String,
+    viewModel: ContenidoViewModel
+) {
+    Spacer(Modifier.height(12.dp))
+
+    if (ruta.startsWith("https://", ignoreCase = true)) {
+        ImagenExternaWikimedia(ruta)
+    } else {
+        ImagenBackendRemota(ruta, viewModel)
+    }
+}
+
+/** Coil carga la imagen externa con el mismo User-Agent usado en UTP. */
+@Composable
+private fun ImagenExternaWikimedia(ruta: String) {
+    val context = LocalContext.current
+
+    val solicitud = remember(ruta, context) {
+        ImageRequest.Builder(context)
+            .data(ruta)
+            .addHeader(
+                "User-Agent",
+                "MPAZPRO-Android/1.0 (https://github.com/jimm-volition/mpaz-pro)"
+            )
+            .crossfade(true)
+            .build()
+    }
+
+    SubcomposeAsyncImage(
+        model = solicitud,
+        contentDescription = "Imagen educativa de Wikimedia Commons",
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp),
+        loading = {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        },
+        error = {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No se pudo cargar la imagen externa.")
+            }
+        },
+        success = {
+            SubcomposeAsyncImageContent()
+        }
+    )
+}
+
+/** Conserva el flujo original para imágenes subidas al backend Spring Boot. */
+@Composable
+private fun ImagenBackendRemota(
     ruta: String,
     viewModel: ContenidoViewModel
 ) {
@@ -319,8 +382,6 @@ private fun ImagenRemota(
             cargando = false
         }
     }
-
-    Spacer(Modifier.height(12.dp))
 
     when {
         cargando -> {
@@ -502,3 +563,11 @@ private fun AudioRemoto(
         )
     }
 }
+
+/** Reduce saltos de línea excesivos sin modificar los textos guardados en MySQL. */
+private fun textoMaterialCompacto(texto: String): String =
+    texto.replace("\r\n", "\n")
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString("\n")
