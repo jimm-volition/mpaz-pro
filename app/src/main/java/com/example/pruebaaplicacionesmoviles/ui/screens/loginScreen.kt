@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.pruebaaplicacionesmoviles.data.model.Rol
 import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
-
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 @Composable
 fun LoginScreen(loginViewModel: LoginViewModel) {
 
@@ -22,6 +22,8 @@ fun LoginScreen(loginViewModel: LoginViewModel) {
     val errorUsuario by loginViewModel.errorUsuario.collectAsState()
     val errorRol by loginViewModel.errorRol.collectAsState()
     val cargando by loginViewModel.cargando.collectAsState()
+    val clave by loginViewModel.clave.collectAsState()
+    val errorClave by loginViewModel.errorClave.collectAsState()
 
 
 
@@ -70,6 +72,33 @@ fun LoginScreen(loginViewModel: LoginViewModel) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+
+        OutlinedTextField(
+            value = clave,
+            onValueChange = loginViewModel::actualizarClave,
+            label = { Text("Contraseña") },
+            visualTransformation = PasswordVisualTransformation(),
+            isError = errorClave.isNotEmpty(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (errorClave.isNotEmpty()) {
+            Text(
+                text = errorClave,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Text(
+            text = "Usuarios demo: UTP01, DOC01, EST01",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
 
         Text(
             text = "Selecciona tu rol",
