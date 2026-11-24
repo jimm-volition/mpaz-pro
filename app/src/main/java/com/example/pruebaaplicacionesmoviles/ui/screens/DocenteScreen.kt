@@ -1,6 +1,9 @@
 package com.example.pruebaaplicacionesmoviles.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,6 +50,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazAzul
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazAzulClaro
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazFondo
+import com.example.pruebaaplicacionesmoviles.ui.theme.MpazTexto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,12 +98,44 @@ fun DocenteScreen(
     }
 
     Scaffold(
+        containerColor = MpazFondo,
         topBar = {
             TopAppBar(
-                title = { Text("Panel docente") },
+                title = {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MpazAzul),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text(
+                                "Panel docente",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Asigna unidades y revisa intentos de tus estudiantes.",
+                                color = MpazAzulClaro
+                            )
+                        }
+                    }
+                },
                 actions = {
-                    Button(onClick = onCerrarSesion) { Text("Salir") }
-                }
+                    Button(
+                        onClick = onCerrarSesion,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = MpazAzul
+                        )
+                    ) {
+                        Text("Salir")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MpazAzul
+                )
             )
         }
     ) { padding ->
@@ -106,34 +152,71 @@ fun DocenteScreen(
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            AnimatedVisibility(visible = estado.mensaje.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = estado.mensaje.isNotEmpty(),
+                enter = fadeIn() + slideInVertically(),
+                exit = fadeOut()
+            ) {
                 Text(estado.mensaje, color = MaterialTheme.colorScheme.primary)
             }
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Estudiantes a cargo", style = MaterialTheme.typography.titleMedium)
+            
+           Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                    "Estudiantes a cargo", 
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MpazTexto
+                    )
                     estado.estudiantes.forEach { est ->
-                        Text("- ${est.alias} (id ${est.id}) · ${est.curso}")
+                        OutlinedButton(
+                            onClick = { viewModel.actualizarEstudianteId(est.id.toString()) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Usar ${est.alias} (id ${est.id})")
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+
                     Text("Unidades asignables", style = MaterialTheme.typography.titleMedium)
                     if (estado.unidadesAsignables.isEmpty()) {
                         Text("Ninguna. Pide a UTP autorizar/publicar.")
                     } else {
                         estado.unidadesAsignables.forEach { u ->
-                            Text("- id ${u.id}: ${u.titulo} [${u.estado.name}]")
+                            OutlinedButton(
+                                onClick = { viewModel.actualizarUnidadId(u.id.toString()) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Usar id ${u.id}: ${u.titulo}")
+                            }
                         }
                     }
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Nueva asignación", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                    "Nueva asignación",
+                     style = MaterialTheme.typography.titleMedium,
+                     fontWeight = FontWeight.Bold,
+                     color = MpazTexto
+                     )
 
                     CampoConError(
                         valor = estado.estudianteIdTexto,
@@ -244,9 +327,19 @@ fun DocenteScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Resultados (intentos)", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Resultados (intentos)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MpazTexto
+                        )
                     if (estado.intentos.isEmpty()) {
                         Text("Aún no hay intentos registrados.")
                     } else {

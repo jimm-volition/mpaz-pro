@@ -64,6 +64,7 @@ interface MpazDao {
         SELECT u.* FROM unidades u
         INNER JOIN asignaciones a ON a.unidadId = u.id
         WHERE a.estudianteId = :estudianteId
+        AND a.activa = 1
         """
     )
     fun observarUnidadesAsignadas(estudianteId: Int): Flow<List<UnidadEntity>>
