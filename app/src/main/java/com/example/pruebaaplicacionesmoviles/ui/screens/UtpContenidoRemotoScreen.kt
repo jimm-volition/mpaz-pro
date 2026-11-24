@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpContenidosViewModel
+import com.example.pruebaaplicacionesmoviles.ui.components.BuscadorWikimedia
+
 
 @Composable
 fun UtpContenidoRemotoScreen(
@@ -588,6 +590,20 @@ fun UtpContenidoRemotoScreen(
                                 onClick = { elegirImagen.launch(arrayOf("image/*")) },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("Seleccionar y subir imagen") }
+
+                            BuscadorWikimedia { imagen ->
+
+                                imagenes = listOf(imagen.url)
+
+                                responsableOrigen = imagen.autor
+                                licencia = imagen.licencia
+
+                                Toast.makeText(
+                                    context,
+                                    "Imagen Wikimedia seleccionada",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
 
                             Spacer(Modifier.height(14.dp))
                             Text("Audio del material", style = MaterialTheme.typography.titleSmall)
