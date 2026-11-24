@@ -5,29 +5,28 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
-import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadesContenido
-import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadDetalleScreen
-import com.example.pruebaaplicacionesmoviles.ui.screens.ActividadScreen
-import com.example.pruebaaplicacionesmoviles.viewmodel.ActividadViewModel
-
 import com.example.pruebaaplicacionesmoviles.data.model.Rol
-import com.example.pruebaaplicacionesmoviles.ui.screens.LoginScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.ActividadScreen
 import com.example.pruebaaplicacionesmoviles.ui.screens.DocenteScreen
-import com.example.pruebaaplicacionesmoviles.ui.screens.UtpScreen
 import com.example.pruebaaplicacionesmoviles.ui.screens.EstudianteDashboard
+import com.example.pruebaaplicacionesmoviles.ui.screens.LoginScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadDetalleScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadesContenido
+import com.example.pruebaaplicacionesmoviles.ui.screens.UtpScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.UtpContenidoRemotoScreen
 import com.example.pruebaaplicacionesmoviles.ui.theme.PruebaAplicacionesMovilesTheme
-import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
+import com.example.pruebaaplicacionesmoviles.viewmodel.ActividadViewModel
+import com.example.pruebaaplicacionesmoviles.viewmodel.ContenidoViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.DocenteViewModel
+import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpViewModel
+import com.example.pruebaaplicacionesmoviles.viewmodel.UtpContenidosViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -35,49 +34,51 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
+
         val repositorio = (application as MpazApp).repositorio
-        val loginViewModel = ViewModelProvider(this)[LoginViewModel::class.java]
-        val docenteViewModel = ViewModelProvider(this)[DocenteViewModel::class.java]
-        val utpViewModel = ViewModelProvider(this)[UtpViewModel::class.java]
-        val actividadViewModel = ViewModelProvider(this)[ActividadViewModel::class.java]
+
+        val loginViewModel =
+            ViewModelProvider(this)[LoginViewModel::class.java]
+
+        val docenteViewModel =
+            ViewModelProvider(this)[DocenteViewModel::class.java]
+
+        val utpViewModel =
+            ViewModelProvider(this)[UtpViewModel::class.java]
+
+        val actividadViewModel =
+            ViewModelProvider(this)[ActividadViewModel::class.java]
+
+        val contenidoViewModel =
+            ViewModelProvider(this)[ContenidoViewModel::class.java]
+
+        val utpContenidosViewModel =
+            ViewModelProvider(this)[UtpContenidosViewModel::class.java]
 
         setContent {
-
             PruebaAplicacionesMovilesTheme {
 
-
-                val usuarioActual by loginViewModel.usuarioAutenticado.collectAsState()
+                val usuarioActual by
+                loginViewModel.usuarioAutenticado.collectAsState()
 
                 when (usuarioActual?.rol) {
 
                     null -> {
-
                         LoginScreen(loginViewModel)
                     }
 
                     Rol.ESTUDIANTE -> {
-
-
                         usuarioActual?.let { estudiante ->
 
+                            val contenidoEstado by
+                            contenidoViewModel.estado.collectAsState()
 
-                            val flujoAsignaturas = remember {
-                                repositorio.observarAsignaturas()
+                            val asignaturas = contenidoEstado.asignaturas
+                            val unidades = contenidoEstado.unidades
+
+                            LaunchedEffect(estudiante.id) {
+                                contenidoViewModel.cargarContenidos()
                             }
-
-                            val asignaturas by flujoAsignaturas.collectAsState(
-                                initial = emptyList()
-                            )
-
-
-                            val flujoUnidades = remember(estudiante.id) {
-                                repositorio.observarUnidadesAsignadas(estudiante.id)
-                            }
-
-                            val unidades by flujoUnidades.collectAsState(
-                                initial = emptyList()
-                            )
-
 
                             val flujoProgresos = remember(estudiante.id) {
                                 repositorio.observarProgreso(estudiante.id)
@@ -87,155 +88,159 @@ class MainActivity : ComponentActivity() {
                                 initial = emptyList()
                             )
 
-
-                            var asignaturaSeleccionada by remember(estudiante.id) {
+                            var asignaturaSeleccionada by
+                            remember(estudiante.id) {
                                 mutableStateOf<Int?>(null)
                             }
 
-                            var unidadSeleccionada by remember(estudiante.id) {
+                            var unidadSeleccionada by
+                            remember(estudiante.id) {
                                 mutableStateOf<Int?>(null)
                             }
 
-                            var actividadAbierta by remember(estudiante.id) {
+                            var actividadAbierta by
+                            remember(estudiante.id) {
                                 mutableStateOf(false)
                             }
 
-
-
                             when {
 
-                                // PRIMER CASO: El estudiante seleccionó una unidad
                                 unidadSeleccionada != null -> {
 
-                                    // Buscamos la unidad seleccionada en la lista que vino desde Room
                                     val unidad = unidades.find {
-                                        it.id == unidadSeleccionada // Comparamos los identificadores
+                                        it.id == unidadSeleccionada
                                     }
 
-                                    // Comprobamos que realmente exista esa unidad
                                     if (unidad != null) {
 
-                                        // NUEVO: COMPROBAMOS SI EL ESTUDIANTE ABRIO LAS ACTIVIDADES
                                         if (actividadAbierta) {
 
-                                            // NUEVO: MOSTRAMOS LA PANTALLA DE ACTIVIDADES
                                             ActividadScreen(
-                                                estudianteId = estudiante.id, // ENVIAMOS EL ID DEL ESTUDIANTE
-
-                                                unidadId = unidad.id, // ENVIAMOS EL ID DE LA UNIDAD
-
-                                                viewModel = actividadViewModel, // ENVIAMOS EL VIEWMODEL DE ACTIVIDADES
-
+                                                estudianteId = estudiante.id,
+                                                unidadId = unidad.id,
+                                                viewModel = actividadViewModel,
                                                 onVolver = {
-                                                    actividadAbierta = false // REGRESAMOS AL CONTENIDO EDUCATIVO
+                                                    actividadAbierta = false
                                                 }
                                             )
 
                                         } else {
 
-                                            // Ejecutamos una operación cuando se abre una unidad diferente
-                                            LaunchedEffect(estudiante.id, unidad.id) {
-
-                                                // Guardamos en Room que el estudiante revisó su contenido
-                                                repositorio.marcarContenidoVisto(estudiante.id, unidad.id)
+                                            LaunchedEffect(
+                                                estudiante.id,
+                                                unidad.id
+                                            ) {
+                                                repositorio.marcarContenidoVisto(
+                                                    estudiante.id,
+                                                    unidad.id
+                                                )
                                             }
 
-                                            // Mostramos la pantalla con la explicación y el audio
                                             UnidadDetalleScreen(
-                                                unidad = unidad, // Enviamos la unidad encontrada
-
+                                                unidad = unidad,
+                                                viewModel = contenidoViewModel,
                                                 onVolver = {
-                                                    unidadSeleccionada = null // Regresamos a la lista de unidades
+                                                    unidadSeleccionada = null
                                                 },
-
-                                                // NUEVO: PERMITIMOS ABRIR LAS ACTIVIDADES
                                                 onAbrirActividades = {
-                                                    actividadAbierta = true // CAMBIAMOS A ACTIVIDADSCREEN
+                                                    actividadAbierta = true
                                                 }
                                             )
                                         }
 
                                     } else {
-
-                                        // Si la unidad ya no existe, regresamos a la lista
                                         LaunchedEffect(unidadSeleccionada) {
                                             unidadSeleccionada = null
                                         }
                                     }
                                 }
 
-                                // SEGUNDO CASO: Seleccionó una asignatura, pero ninguna unidad
                                 asignaturaSeleccionada != null -> {
 
-                                    // Guardamos el ID de la asignatura en una variable local
                                     val idAsignatura = asignaturaSeleccionada
 
-                                    // Comprobamos que el ID no sea null
                                     if (idAsignatura != null) {
-
-                                        // Mostramos tu pantalla real de unidades
                                         UnidadesContenido(
-                                            asignaturaId = idAsignatura, // Asignatura seleccionada
-                                            asignaturas = asignaturas, // Lista de asignaturas de Room
-                                            unidades = unidades, // Unidades asignadas al estudiante
-                                            progresos = progresos, // Progresos almacenados
-
+                                            asignaturaId = idAsignatura,
+                                            asignaturas = asignaturas,
+                                            unidades = unidades,
+                                            progresos = progresos,
                                             onVolver = {
-                                                asignaturaSeleccionada = null // Regresamos al Dashboard
+                                                asignaturaSeleccionada = null
                                             },
-
                                             onAbrirUnidad = { unidadId ->
-                                                unidadSeleccionada = unidadId // Abrimos la unidad seleccionada
+                                                unidadSeleccionada = unidadId
                                             }
                                         )
                                     }
                                 }
 
-                                // TERCER CASO: No ha seleccionado ninguna asignatura
                                 else -> {
 
-                                    // Colocamos el botón de salir encima del Dashboard
-                                    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .statusBarsPadding()
+                                    ) {
 
-                                        // Botón para cerrar sesión
                                         Button(
                                             onClick = {
-                                                loginViewModel.cerrarSesion() // Borra la sesión actual
+                                                contenidoViewModel.limpiar()
+                                                loginViewModel.cerrarSesion()
                                             },
                                             modifier = Modifier.padding(8.dp)
                                         ) {
-                                            Text("Cerrar sesión") // Texto del botón
+                                            Text("Cerrar sesión")
                                         }
 
-                                        // Mostramos el Dashboard que ya programaste
+                                        if (contenidoEstado.cargando) {
+                                            LinearProgressIndicator(
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+
+                                        contenidoEstado.error?.let { mensaje ->
+
+                                            Text(
+                                                text = "Error: $mensaje",
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.padding(12.dp)
+                                            )
+
+                                            Button(
+                                                onClick = {
+                                                    contenidoViewModel.cargarContenidos()
+                                                },
+                                                modifier = Modifier.padding(
+                                                    horizontal = 12.dp
+                                                )
+                                            ) {
+                                                Text("Reintentar")
+                                            }
+                                        }
+
                                         EstudianteDashboard(
-                                            usuario = estudiante, // Usuario autenticado
-                                            asignaturas = asignaturas, // Asignaturas de Room
-                                            unidades = unidades, // Unidades del estudiante
-                                            progresos = progresos, // Progresos guardados
-
-                                            onAbrirAsignatura = { asignaturaId ->
-                                                asignaturaSeleccionada = asignaturaId // Abre la asignatura
+                                            usuario = estudiante,
+                                            asignaturas = asignaturas,
+                                            unidades = unidades,
+                                            progresos = progresos,
+                                            onAbrirAsignatura = {
+                                                asignaturaSeleccionada = it
                                             },
-
-                                            modifier = Modifier.weight(1f) // Usa el espacio debajo del botón
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
                                 }
                             }
-
-
-
                         }
                     }
 
                     Rol.DOCENTE -> {
 
-
                         DocenteScreen(
                             viewModel = docenteViewModel,
-
                             onCerrarSesion = {
+                                contenidoViewModel.limpiar()
                                 loginViewModel.cerrarSesion()
                             }
                         )
@@ -243,14 +248,50 @@ class MainActivity : ComponentActivity() {
 
                     Rol.UTP -> {
 
+                        var mostrarUtpRemoto by remember {
+                            mutableStateOf(false)
+                        }
 
-                        UtpScreen(
-                            viewModel = utpViewModel,
+                        if (mostrarUtpRemoto) {
 
-                            onCerrarSesion = {
-                                loginViewModel.cerrarSesion()
+                            UtpContenidoRemotoScreen(
+                                viewModel = utpContenidosViewModel,
+                                onVolver = {
+                                    mostrarUtpRemoto = false
+                                }
+                            )
+
+                        } else {
+
+                            Column(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+
+                                Button(
+                                    onClick = {
+                                        mostrarUtpRemoto = true
+                                    },
+                                    modifier = Modifier
+                                        .statusBarsPadding()
+                                        .padding(8.dp)
+                                ) {
+                                    Text("Gestionar contenidos en servidor")
+                                }
+
+                                Box(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    UtpScreen(
+                                        viewModel = utpViewModel,
+                                        onCerrarSesion = {
+                                            contenidoViewModel.limpiar()
+                                            utpContenidosViewModel.limpiar()
+                                            loginViewModel.cerrarSesion()
+                                        }
+                                    )
+                                }
                             }
-                        )
+                        }
                     }
                 }
             }
