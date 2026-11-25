@@ -7,12 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-
+import com.example.pruebaaplicacionesmoviles.core.network.ConfigBackend
 class RecursoRemotoRepository {
 
     private val cliente = OkHttpClient()
 
-    private val urlBase = "http://127.0.0.1:8080"
+    private val urlBase = ConfigBackend.ORIGEN
 
     suspend fun descargarRecurso(ruta: String): ByteArray =
         withContext(Dispatchers.IO) {

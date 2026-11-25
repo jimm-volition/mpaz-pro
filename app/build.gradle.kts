@@ -9,12 +9,22 @@ plugins {
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
+
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val urlBackend = providers.gradleProperty("mpazBackendUrl")
+    .orElse("http://127.0.0.1:18080")
+    .get()
+
+val puertoBackend = providers.gradleProperty("mpazHostPort")
+    .orElse("18080")
+    .get()
+
 android {
     namespace = "com.example.pruebaaplicacionesmoviles"
+
     compileSdk {
         version = release(37)
     }
@@ -27,12 +37,20 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "MPAZ_BACKEND_URL",
+            "\"$urlBackend\""
+        )
     }
 
     signingConfigs {
         create("release") {
             if (keystorePropertiesFile.exists()) {
-                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                storeFile = rootProject.file(
+                    keystoreProperties["storeFile"] as String
+                )
                 storePassword = keystoreProperties["storePassword"] as String
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
@@ -43,17 +61,19 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            // R8 con packageScope en androidx/kotlin rompe Room (IllegalAccessError al abrir la DB).
             isMinifyEnabled = false
             isShrinkResources = false
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -64,7 +84,7 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
@@ -72,15 +92,93 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
     testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     testImplementation("io.mockk:mockk-jvm:1.14.11")
+
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+}
+
+val adbSdk = androidComponents.sdkComponents.adb
+
+val prepararConexionAndroid = tasks.register("prepararConexionAndroid") {
+
+    doLast {
+        if (urlBackend == "http://127.0.0.1:18080") {
+
+            val adb = adbSdk.get().asFile.absolutePath
+
+            fun ejecutar(vararg argumentos: String): Pair<Int, String> {
+
+                val proceso = ProcessBuilder(
+                    listOf(adb) + argumentos.toList()
+                )
+                    .redirectErrorStream(true)
+                    .start()
+
+                val salida = proceso.inputStream
+                    .bufferedReader()
+                    .use { it.readText() }
+
+                return proceso.waitFor() to salida
+            }
+
+            val (resultado, salida) = ejecutar("devices")
+
+            if (resultado != 0) {
+
+                logger.warn(salida)
+
+            } else {
+
+                val dispositivos = salida.lineSequence()
+                    .map { it.trim().split(Regex("\\s+")) }
+                    .filter {
+                        it.size >= 2 && it[1] == "device"
+                    }
+                    .map { it[0] }
+                    .toList()
+
+                if (dispositivos.isEmpty()) {
+                    logger.warn("No hay dispositivos Android conectados.")
+                }
+
+                dispositivos.forEach { dispositivo ->
+
+                    val (codigo, mensaje) = ejecutar(
+                        "-s",
+                        dispositivo,
+                        "reverse",
+                        "tcp:18080",
+                        "tcp:$puertoBackend"
+                    )
+
+                    if (codigo == 0) {
+                        logger.lifecycle(
+                            "Conexion MPAZ preparada: $dispositivo"
+                        )
+                    } else {
+                        logger.warn(mensaje)
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.matching {
+    it.name == "preDebugBuild"
+}.configureEach {
+    dependsOn(prepararConexionAndroid)
 }
