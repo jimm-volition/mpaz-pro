@@ -9,8 +9,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 
-// Celular físico / emulador: usar adb reverse tcp:8080 tcp:8080 (ver adb-reverse-mpaz.bat)
-private const val BASE_URL = "http://127.0.0.1:8080/api/v1/"
+
 
 data class LoginRequest(
     val codigoUsuario: String,
@@ -59,7 +58,7 @@ object ApiCliente {
 
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(ConfigBackend.API)
             .client(clienteHttp)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
