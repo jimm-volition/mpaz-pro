@@ -27,6 +27,7 @@ import com.example.pruebaaplicacionesmoviles.viewmodel.DocenteViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpContenidosViewModel
+import com.example.pruebaaplicacionesmoviles.core.network.ApiCliente
 
 class MainActivity : ComponentActivity() {
 
@@ -177,6 +178,23 @@ class MainActivity : ComponentActivity() {
 
                                 else -> {
 
+                                    var porcentajeServidor by remember {
+                                        mutableStateOf<Int?>(null)
+                                    }
+
+                                    LaunchedEffect(estudiante.id) {
+                                        porcentajeServidor = try {
+                                            val objetivos = ApiCliente.progreso.inicio().objetivos
+                                            if (objetivos.isEmpty()) {
+                                                0
+                                            } else {
+                                                objetivos.sumOf { it.porcentajeAvance } / objetivos.size
+                                            }
+                                        } catch (e: Exception) {
+                                            null
+                                        }
+                                    }
+
                                     Column(
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -227,7 +245,8 @@ class MainActivity : ComponentActivity() {
                                             onAbrirAsignatura = {
                                                 asignaturaSeleccionada = it
                                             },
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier.weight(1f),
+                                            porcentajeServidor = porcentajeServidor
                                         )
                                     }
                                 }

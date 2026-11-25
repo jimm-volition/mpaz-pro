@@ -1,4 +1,4 @@
-package com.example.pruebaaplicacionesmoviles.viewmodel
+﻿package com.example.pruebaaplicacionesmoviles.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -8,6 +8,16 @@ import com.example.pruebaaplicacionesmoviles.data.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.pruebaaplicacionesmoviles.core.network.ApiCliente
+import com.example.pruebaaplicacionesmoviles.core.network.EnvioActividadRequest
+import com.example.pruebaaplicacionesmoviles.core.network.FeedbackRemoto
+import com.example.pruebaaplicacionesmoviles.core.network.RespuestaEnviadaRequest
+import com.example.pruebaaplicacionesmoviles.core.network.RespuestaSeleccionRequest
+import java.time.Instant
+import java.util.UUID
+import com.example.pruebaaplicacionesmoviles.core.network.EntregaIntentoRequest
+import com.example.pruebaaplicacionesmoviles.core.network.InicioIntentoRequest
+import com.example.pruebaaplicacionesmoviles.core.network.PruebaRemota
 
 data class ActividadUiState(
     val cargando: Boolean = false,
@@ -16,6 +26,9 @@ data class ActividadUiState(
     val actividad: Actividad? = null,
     val preguntas: List<Pregunta> = emptyList(),
     val respuestas: Map<Int, Int> = emptyMap(),
+    val opcionesPorPregunta: Map<Int, List<Long>> = emptyMap(),
+    val feedback: List<FeedbackRemoto> = emptyList(),
+    val intentoId: Long? = null,
     val intentosUsados: Int = 0,
     val maxIntentos: Int = 0,
     val resultadoPorcentaje: Int? = null,
@@ -33,47 +46,44 @@ class ActividadViewModel(application: Application):AndroidViewModel(application)
 
     //GUARDA LA ASIGNACION DEL ESTUDIANTE PARA UNA UNIDAD
     private var asignacionActual: Asignacion? = null
-
+    private var pruebaActual: PruebaRemota? = null
 
     fun cargarUnidad(estudianteId: Int, unidadId: Int) {
+        _estado.value = ActividadUiState(cargando = true)
+        asignacionActual = null
+        pruebaActual = null
 
-        _estado.value = ActividadUiState(cargando = true) // REINICIA LA PANTALLA
-        asignacionActual = null // LIMPIA LA ASIGNACION ANTERIOR
-
-
-        viewModelScope.launch { //INICIA LA CONSULTA SIN BLOQUEAR LA PANTALLA
+        viewModelScope.launch {
             try {
-
-                // VERIFICA SI EL ESTUDIANTE TIENE ASIGNADA ESTA UNIDAD
-                val asignacion = repositorio.obtenerAsignacion(
-                    estudianteId,
-                    unidadId
-                )
-
-
-                // SI NO EXISTE ASIGNACION, SE IMPIDE ABRIR LA ACTIVIDAD
-                if (asignacion == null) {
-                    _estado.value = ActividadUiState(
-                        mensaje = "Esta unidad no está asignada a tu perfil"
+                val remotas = ApiCliente.actividades.listar(31)
+                val lista = remotas.map { remota ->
+                    Actividad(
+                        id = remota.id.toInt(),
+                        unidadId = unidadId,
+                        titulo = remota.titulo,
+                        tipo = TipoActividad.PRACTICA,
+                        orden = 0
                     )
-                    return@launch // Finaliza esta corrutina
+                }.toMutableList()
+
+                val prueba = try {
+                    ApiCliente.pruebas.obtener(31)
+                } catch (e: Exception) {
+                    null
+                }
+                pruebaActual = prueba
+                if (prueba != null) {
+                    lista += Actividad(
+                        id = prueba.pruebaId.toInt(),
+                        unidadId = unidadId,
+                        titulo = "Prueba final",
+                        tipo = TipoActividad.PRUEBA_FINAL,
+                        orden = 1
+                    )
                 }
 
-                asignacionActual = asignacion // GUARDA LA ASIGNACION ENCONTRADA
-
-                // OBTIENE LAS ACTIVIDADES QUE PERTENECEN A LA UNIDAD
-                val lista = repositorio.obtenerActividades(unidadId)
-                    .sortedBy { it.orden }
-
-                //ESTO ACTUALIZA LA VISTA QUE OBSERVARA LA PANTALLA
-
-                _estado.value = ActividadUiState(
-                    actividades = lista
-                )
-
+                _estado.value = ActividadUiState(actividades = lista)
             } catch (e: Exception) {
-
-                // ESTO INFORMA SI FALLO LA FAKIN CONSULTA
                 _estado.value = ActividadUiState(
                     mensaje = "No se pudieron cargar las actividades"
                 )
@@ -82,44 +92,101 @@ class ActividadViewModel(application: Application):AndroidViewModel(application)
     }
 
     fun abrirActividad(actividad: Actividad) {
-
-        val asignacion = asignacionActual ?: return // Necesitamos una asignación válida
-
-
         _estado.value = _estado.value.copy(
             cargando = true,
             actividad = actividad,
             preguntas = emptyList(),
             respuestas = emptyMap(),
+            opcionesPorPregunta = emptyMap(),
+            feedback = emptyList(),
+            intentoId = null,
             resultadoPorcentaje = null,
             mensaje = ""
         )
 
         viewModelScope.launch {
             try {
+                if (actividad.tipo == TipoActividad.PRUEBA_FINAL) {
+                    val prueba = ApiCliente.pruebas.obtener(31)
+                    pruebaActual = prueba
+                    if (!prueba.puedeRendir) {
+                        val aviso = if (prueba.intentosRestantes <= 0) {
+                            "Ya utilizaste todos los intentos de esta prueba"
+                        } else {
+                            "La prueba esta fuera de plazo"
+                        }
+                        _estado.value = _estado.value.copy(
+                            cargando = false,
+                            intentosUsados = prueba.limiteIntentos,
+                            maxIntentos = prueba.limiteIntentos,
+                            mensaje = aviso
+                        )
+                        return@launch
+                    }
 
+                    val intento = ApiCliente.pruebas.iniciar(
+                        prueba.pruebaId,
+                        InicioIntentoRequest(UUID.randomUUID().toString())
+                    )
+                    val remotas = ApiCliente.pruebas.preguntas(intento.id)
+                    val preguntas = mutableListOf<Pregunta>()
+                    val ids = mutableMapOf<Int, List<Long>>()
 
-                val preguntas = repositorio.obtenerPreguntas(actividad.id)
-                    .sortedBy { it.orden }
+                    remotas.forEachIndexed { orden, pregunta ->
+                        val textos = pregunta.opciones.map { it.texto }
+                        ids[pregunta.id.toInt()] = pregunta.opciones.map { it.id }
+                        preguntas += Pregunta(
+                            id = pregunta.id.toInt(),
+                            actividadId = actividad.id,
+                            enunciado = pregunta.enunciado,
+                            opcionA = textos.getOrElse(0) { "" },
+                            opcionB = textos.getOrElse(1) { "" },
+                            opcionC = textos.getOrElse(2) { "" },
+                            opcionD = textos.getOrElse(3) { "" },
+                            indiceCorrecto = -1,
+                            explicacionRespuesta = "",
+                            orden = orden
+                        )
+                    }
 
-
-                val usados = if (actividad.tipo == TipoActividad.PRUEBA_FINAL) {
-                    repositorio.contarIntentosFinales(asignacion.id, actividad.id)
-                } else {
-                    0
+                    _estado.value = _estado.value.copy(
+                        cargando = false,
+                        preguntas = preguntas,
+                        opcionesPorPregunta = ids,
+                        intentoId = intento.id,
+                        intentosUsados = prueba.intentosUtilizados + 1,
+                        maxIntentos = prueba.limiteIntentos
+                    )
+                    return@launch
                 }
 
+                val remota = ApiCliente.actividades.obtener(actividad.id.toLong())
+                val preguntas = mutableListOf<Pregunta>()
+                val ids = mutableMapOf<Int, List<Long>>()
+
+                remota.preguntas.orEmpty().forEachIndexed { orden, pregunta ->
+                    val textos = pregunta.opciones.map { it.texto }
+                    ids[pregunta.id.toInt()] = pregunta.opciones.map { it.id }
+                    preguntas += Pregunta(
+                        id = pregunta.id.toInt(),
+                        actividadId = actividad.id,
+                        enunciado = pregunta.enunciado,
+                        opcionA = textos.getOrElse(0) { "" },
+                        opcionB = textos.getOrElse(1) { "" },
+                        opcionC = textos.getOrElse(2) { "" },
+                        opcionD = textos.getOrElse(3) { "" },
+                        indiceCorrecto = -1,
+                        explicacionRespuesta = "",
+                        orden = orden
+                    )
+                }
 
                 _estado.value = _estado.value.copy(
                     cargando = false,
                     preguntas = preguntas,
-                    intentosUsados = usados,
-                    maxIntentos = asignacion.maxIntentos
+                    opcionesPorPregunta = ids
                 )
-
             } catch (e: Exception) {
-
-
                 _estado.value = _estado.value.copy(
                     cargando = false,
                     mensaje = "No se pudieron cargar las preguntas"
@@ -144,88 +211,75 @@ class ActividadViewModel(application: Application):AndroidViewModel(application)
 
     }
 
-    fun finalizarActividad() { //ESTO COMPRUEBA LAS RESPUESTAS Y SOLICITA GUARDARLAS EN ROOM
+    fun finalizarActividad() {
+        val datos = _estado.value
+        val actividad = datos.actividad ?: return
 
-        val datos = _estado.value // OBTIENE UNA COPIA DEL ESTADO ACTUAL
-        val actividad = datos.actividad ?: return // NECESITAMOS QUE DEVUELVA UNA ACTIVIDAD
-        val asignacion = asignacionActual ?: return // NECESITAMOS QUE DEVUELVA UNA ASIGNACIO
+        if (datos.guardando || datos.resultadoPorcentaje != null) return
 
-        if (datos.guardando || datos.resultadoPorcentaje != null) return // EVITA QUE HAYAN DATOS DUPLICADOS
-
-
-        //ESTE IF NO DEJARA QUE FINALIZAR ACTIVIDADES SIN PREGUNTAS
-        if (datos.preguntas.isEmpty()) {
-            _estado.value = datos.copy(mensaje = "Esta actividad no tiene preguntas")
+        val aviso = mensajeDeEnvio(
+            datos.preguntas.size,
+            datos.respuestas.keys,
+            datos.preguntas.map { it.id }.toSet()
+        )
+        if (aviso != null) {
+            _estado.value = datos.copy(mensaje = aviso)
             return
         }
 
-        // ESTO COMPROBARA QUE TODAS LAS ACTIVIDADES TENGAN UNA ALTERNATIVA ELEGIDDA
-        val faltanRespuestas = datos.preguntas.any {
-            it.id !in datos.respuestas
+        val enviadas = mutableListOf<RespuestaEnviadaRequest>()
+        for (pregunta in datos.preguntas) {
+            val indice = datos.respuestas[pregunta.id] ?: return
+            val alternativaId = datos.opcionesPorPregunta[pregunta.id]?.getOrNull(indice)
+            if (alternativaId == null) {
+                _estado.value = datos.copy(mensaje = "La alternativa elegida no es valida")
+                return
+            }
+            enviadas += RespuestaEnviadaRequest(
+                preguntaId = pregunta.id.toLong(),
+                respuesta = RespuestaSeleccionRequest(
+                    tipo = "SELECCION",
+                    alternativaId = alternativaId
+                )
+            )
         }
-
-
-        if (faltanRespuestas) {
-            _estado.value = datos.copy(mensaje = "Debes responder todas las preguntas")
-            return
-        }
-
-        //ESTO CALCULA CUANTAS RESPUESTAS SON CORRECTAS
-        val correctas = datos.preguntas.count {
-            datos.respuestas[it.id] == it.indiceCorrecto
-        }
-
-
-        val porcentaje = correctas * 100 / datos.preguntas.size
 
         _estado.value = datos.copy(guardando = true, mensaje = "")
 
         viewModelScope.launch {
-
             try {
-                var intentos = datos.intentosUsados //GUARDA EL CONTADOR ACTUAL
-
-
-                // ANTES DE GUARDAR VERIFICA NUEVAMENTE EL LIMITE DE PRUEBA FINAL
+                val puntaje: Int
+                val feedback: List<FeedbackRemoto>
                 if (actividad.tipo == TipoActividad.PRUEBA_FINAL) {
-
-                    intentos = repositorio.contarIntentosFinales(
-                        asignacion.id,
-                        actividad.id
+                    val intentoId = datos.intentoId
+                        ?: throw IllegalStateException("No hay un intento abierto")
+                    val resultado = ApiCliente.pruebas.entregar(
+                        intentoId,
+                        EntregaIntentoRequest(
+                            respuestas = enviadas,
+                            respondidaEn = Instant.now().toString()
+                        )
                     )
-
-                }
-
-                //INPIDE GUARDAR SI YA SE USARON TODOS LOS INTENTOS WUAJAJJA
-                if (intentos >= asignacion.maxIntentos) {
-                    _estado.value = _estado.value.copy(
-                        guardando = false,
-                        intentosUsados = intentos,
-                        mensaje = "Ya utilizaste todos tus intentos"
+                    puntaje = resultado.puntaje
+                    feedback = resultado.feedback
+                } else {
+                    val resultado = ApiCliente.actividades.enviar(
+                        actividad.id.toLong(),
+                        EnvioActividadRequest(
+                            clientEventId = UUID.randomUUID().toString(),
+                            respuestas = enviadas,
+                            respondidaEn = Instant.now().toString()
+                        )
                     )
-                    return@launch
+                    puntaje = resultado.puntaje
+                    feedback = resultado.feedback
                 }
-
-
-                // EL REPOSITORY GUARDA LOS INTENTOS, LAS RESPUESTAS Y EL PROGRESO
-                repositorio.guardarResultado(
-                    asignacionId = asignacion.id,
-                    actividadId = actividad.id,
-                    respuestasPorPregunta = datos.respuestas
-                )
-
-                //SOLO DESPUES DE HABER GHUARDADO SE MOSTRARA EL RESULTADO
                 _estado.value = _estado.value.copy(
                     guardando = false,
-                    resultadoPorcentaje = porcentaje,
-                    intentosUsados = if (actividad.tipo == TipoActividad.PRUEBA_FINAL) {
-                        intentos + 1
-                    } else {
-                        intentos
-                    },
+                    resultadoPorcentaje = puntaje,
+                    feedback = feedback,
                     mensaje = "Resultado guardado correctamente"
                 )
-
             } catch (e: Exception) {
                 _estado.value = _estado.value.copy(
                     guardando = false,
@@ -245,51 +299,18 @@ class ActividadViewModel(application: Application):AndroidViewModel(application)
             mensaje = "" // Limpia los mensajes
         )
     }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+fun mensajeDeEnvio(
+    cantidadPreguntas: Int,
+    idsRespondidos: Set<Int>,
+    idsPreguntas: Set<Int>
+): String? {
+    if (cantidadPreguntas == 0) {
+        return "Esta actividad no tiene preguntas"
+    }
+    if (idsPreguntas.any { it !in idsRespondidos }) {
+        return "Debes responder todas las preguntas"
+    }
+    return null
 }

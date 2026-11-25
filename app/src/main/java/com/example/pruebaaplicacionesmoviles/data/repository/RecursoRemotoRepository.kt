@@ -12,7 +12,7 @@ class RecursoRemotoRepository {
 
     private val cliente = OkHttpClient()
 
-    private val urlBase = "http://127.0.0.1:8082"
+    private val urlBase = "http://127.0.0.1:8080"
 
     suspend fun descargarRecurso(ruta: String): ByteArray =
         withContext(Dispatchers.IO) {

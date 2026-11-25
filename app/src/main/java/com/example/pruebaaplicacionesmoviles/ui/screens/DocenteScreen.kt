@@ -77,6 +77,10 @@ fun DocenteScreen(
             viewModel.limpiarMensaje()
         }
     }
+    
+    LaunchedEffect(Unit) {
+        viewModel.observar()
+    }
 
     if (mostrarInicio) {
         SelectorFechaDialog(
@@ -185,16 +189,23 @@ fun DocenteScreen(
                         }
                     }
 
-                    Text("Unidades asignables", style = MaterialTheme.typography.titleMedium)
-                    if (estado.unidadesAsignables.isEmpty()) {
-                        Text("Ninguna. Pide a UTP autorizar/publicar.")
+                    Text(
+                        "Objetivos asignables (servidor)",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    if (estado.objetivos.isEmpty()) {
+                        Text("Ninguno. UTP debe dejar el OA en AUTORIZADO o PUBLICADO.")
                     } else {
-                        estado.unidadesAsignables.forEach { u ->
+                        estado.objetivos.forEach { objetivo ->
                             OutlinedButton(
-                                onClick = { viewModel.actualizarUnidadId(u.id.toString()) },
+                                onClick = {
+                                    viewModel.actualizarUnidadId(objetivo.id.toString())
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Usar id ${u.id}: ${u.titulo}")
+                                Text(
+                                    "Usar OA ${objetivo.id}: ${objetivo.codigo} · ${objetivo.estado}"
+                                )
                             }
                         }
                     }
@@ -226,10 +237,14 @@ fun DocenteScreen(
                     )
                     CampoConError(
                         valor = estado.unidadIdTexto,
-                        etiqueta = "ID unidad (Int, ej: 1)",
+                        etiqueta = "ID objetivo (Int, ej: 31)",
                         error = estado.errorUnidad,
                         onChange = viewModel::actualizarUnidadId
                     )
+                    Text("Curso activo: ${estado.cursoId}")
+                    if (estado.objetivos.isEmpty()) {
+                        Text("No hay objetivos disponibles en el servidor")
+                    }
 
                     OutlinedTextField(
                         value = estado.fechaInicio,
@@ -335,20 +350,72 @@ fun DocenteScreen(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        "Resultados (intentos)",
+                        "Resultados del estudiante 3",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MpazTexto
-                        )
-                    if (estado.intentos.isEmpty()) {
-                        Text("Aún no hay intentos registrados.")
+                    )
+                    if (estado.enviosServidor.isEmpty() && estado.intentosServidor.isEmpty()) {
+                        Text("Aún no hay resultados del estudiante 3.")
                     } else {
-                        estado.intentos.forEach { intento ->
+                        estado.enviosServidor.forEach { envio ->
+                            Text("Práctica ${envio.actividadId}: ${envio.puntaje}%")
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        estado.intentosServidor.forEach { intento ->
+                            val puntaje = intento.puntaje?.let { "$it%" } ?: "sin puntaje"
                             Text(
-                                "Intento ${intento.id}: ${intento.correctas}/" +
-                                    "${intento.totalPreguntas} (${intento.porcentaje}%) · ${intento.fechaHora}"
+                                "Prueba ${intento.pruebaId}, intento ${intento.numeroIntento}: " +
+                                    "$puntaje · ${intento.estado}"
                             )
                             Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Informe pedagógico",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MpazTexto
+                    )
+                    Button(
+                        onClick = viewModel::generarInforme,
+                        enabled = !estado.generandoInforme,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (estado.generandoInforme) "Guardando..." else "Generar informe")
+                    }
+                    estado.informe?.let { informe ->
+                        Text("Estado: ${informe.estado}")
+                        Text(informe.resumen)
+                        Text(informe.areasRefuerzo)
+                        if (informe.estado != "VALIDADO") {
+                            Button(
+                                onClick = viewModel::validarInforme,
+                                enabled = !estado.generandoInforme,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Validar informe")
+                            }
+                        }
+                        Button(
+                            onClick = viewModel::descargarPdf,
+                            enabled = !estado.generandoInforme,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Descargar PDF")
                         }
                     }
                 }

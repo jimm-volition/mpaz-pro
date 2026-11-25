@@ -1,80 +1,153 @@
-# MPAZ PRO
+# MPAZ PRO (Android)
 
-Aplicación Android para **2° básico** (caso MPAZ PRO — DSY1105). Permite a la UTP autorizar y publicar unidades, al docente asignarlas a estudiantes y controlar intentos de prueba final, y al alumno consultar material, responder actividades y ver retroalimentación.
+Cliente móvil del caso **MPAZ PRO** (2° básico · DSY1105). La app se conecta al **API Gateway** (`:8080`); no llama directo a cada microservicio.
 
 Repositorio: [jimm-volition/mpaz-pro](https://github.com/jimm-volition/mpaz-pro)
 
-## Tecnologías
+Backend (Docker): carpeta hermana  
+`../../proyecto/Backend-Aplicaciones` (dentro del workspace EA3).
 
-- Kotlin
-- Jetpack Compose + Material 3
-- Arquitectura **MVVM**
-- Persistencia local con **Room** (SQLite)
+---
+
+## Qué hace cada rol
+
+| Rol | Usuario | Clave | Capacidad |
+|---|---|---|---|
+| UTP | `UTP01` | `demo1234` | Crear/editar unidades, OA y materiales; transiciones hasta **PUBLICADO**; subir recursos |
+| Docente | `DOC01` | `demo1234` | Ver curso/estudiantes; asignar **objetivos** autorizados/publicados; resultados e informe PDF |
+| Estudiante | `EST01` | `demo1234` | Ver unidades/materiales **PUBLICADOS**; prácticas y prueba final |
+
+Login remoto: `POST /api/v1/auth/demo-login` (JWT). El token se envía como `Authorization: Bearer …`.
+
+### Estados de contenido (UTP)
+
+`BORRADOR → EN_REVISION → AUTORIZADO → PUBLICADO` (y `DESHABILITADO`).
+
+- El **estudiante** solo ve lo **PUBLICADO**.
+- El **docente** puede asignar objetivos en **AUTORIZADO** o **PUBLICADO**.
+- Para publicar un OA, la unidad debe estar PUBLICADA; para publicar material, OA y unidad también.
+
+### Datos demo semilla (backend)
+
+- Curso `1` — *2° Básico A* (docente DOC01).
+- Matrícula EST01 en ese curso.
+- Unidad `10` *Idea principal (demo)* + OA **`31`** + material `31` (todo PUBLICADO).
+- Actividad y prueba final asociadas al OA `31`.
+
+---
+
+## Stack Android
+
+- Kotlin, Jetpack Compose, Material 3, MVVM
+- Retrofit / OkHttp → gateway
+- Room (persistencia local / apoyo)
 - Coroutines + Flow
-- Recursos nativos: **Photo Picker** (UTP) y **TextToSpeech** (contenido del estudiante)
+- Nativos: Photo Picker (UTP), TextToSpeech (estudiante), FileProvider (PDF docente)
+- APK release firmada (`mpaz-pro.jks` local; **no** subir al repo)
 
-## Roles y flujo
+---
 
-| Rol | Usuario de prueba | Qué puede hacer |
-|---|---|---|
-| UTP | `UTP01` | Autorizar, publicar o deshabilitar unidades; asociar imagen |
-| Docente | `DOC01` | Asignar unidades a estudiantes, definir fechas e intentos, ver resultados |
-| Estudiante | `EST01` | Ver unidades asignadas, estudiar contenido, rendir práctica/prueba |
+## Cómo correr (defensa / celular)
 
-**Login:** ingresar el alias y seleccionar el rol correspondiente (datos ficticios; no hay contraseña institucional).
+### 1. Backend
 
-### Flujo de demostración sugerido
+```bash
+cd ../../proyecto/Backend-Aplicaciones
+# Tener .env con secretos MySQL/JWT (ver .env.example)
+docker compose up -d
+```
 
-1. Ingresar como `UTP01` → autorizar/publicar una unidad.
-2. Salir e ingresar como `DOC01` → crear asignación para `EST01` (checkbox, fechas, switch “disponible”).
-3. Salir e ingresar como `EST01` → abrir la asignatura → unidad → actividades → responder.
-4. Volver como `DOC01` → revisar intentos en resultados.
+Probar: [http://127.0.0.1:8080/actuator/health](http://127.0.0.1:8080/actuator/health) → `"status":"UP"`.
 
-## Cómo ejecutar
+| Servicio | Puerto host |
+|---|---|
+| gateway | 8080 |
+| ms-admin | 8081 |
+| ms-contenidos | 8082 |
+| ms-actividades-evaluaciones | 8083 |
+| ms-progreso | 8084 |
+| MySQL | 127.0.0.1:3307 |
 
-1. Clonar el repositorio.
-2. Abrir el proyecto en **Android Studio**.
-3. Esperar el sync de Gradle (`local.properties` se genera en tu máquina con la ruta del SDK).
-4. Ejecutar en emulador o dispositivo (API 24+).
+### 2. Túnel USB (celular físico)
 
-Si cambias el esquema de Room durante el desarrollo, desinstala la app una vez para recrear la base (hay `fallbackToDestructiveMigration` en debug/MVP).
+La release apunta a `http://127.0.0.1:8080`. En el teléfono eso solo funciona con **adb reverse**:
 
-## Estructura del proyecto
+1. USB + depuración USB.
+2. Doble clic en `adb-reverse-mpaz.bat` (elige el Samsung e ignora iVCam/Softwiner).
+3. Debe listar `tcp:8080`. Si desconectás el cable, volvé a ejecutar el bat.
+
+### 3. Instalar APK
+
+- Archivo: `MPAZ-Pro-release.apk` (o `app/build/outputs/apk/release/app-release.apk`).
+- Generar de nuevo:
+
+```bash
+.\gradlew.bat :app:assembleRelease --no-configuration-cache
+```
+
+Requiere `keystore.properties` + `mpaz-pro.jks` en la raíz del módulo Android (gitignored).
+
+### 4. Emulador
+
+También puede usar `127.0.0.1:8080` **si** corrés `adb reverse tcp:8080 tcp:8080` hacia el emulador.
+
+---
+
+## Guion de demo sugerido
+
+1. **EST01** → Lenguaje → unidad *Idea principal (demo)* → material / actividades.
+2. **DOC01** → usar OA **31** → crear asignación para EST01 (fechas, intentos, confirmación).
+3. **UTP01** (si preguntan) → mostrar transición de estados hasta PUBLICADO.
+4. Volver a **DOC01** → resultados / informe.
+
+Guía impresa: `../../GUIA_DEFENSA_MPAZ_PRO.pdf` (workspace EA3).
+
+---
+
+## Estructura (app)
 
 ```
 app/src/main/java/com/example/pruebaaplicacionesmoviles/
-├── MainActivity.kt              # Navegación por rol
-├── MpazApp.kt                   # Application + repositorio + semilla
+├── MainActivity.kt
+├── MpazApp.kt
+├── core/network/          # Retrofit: login, docente, actividades, UTP, contenidos
 ├── data/
-│   ├── model/                   # Modelos del dominio (contrato)
-│   ├── local/                   # Entities, DAO, Database, DatosSemilla
-│   └── repository/              # MpazRepository + RoomMpazRepository
-├── viewmodel/                   # Login, UTP, Docente, Actividad
-├── ui/
-│   ├── screens/                 # Pantallas Compose
-│   ├── components/              # Componentes reutilizables
-│   └── theme/                   # Colores y tema MPAZ
+│   ├── model/
+│   ├── local/             # Room
+│   └── repository/
+├── viewmodel/
+└── ui/screens/            # Login, dashboards, UTP remoto, Docente, Actividad, …
 ```
+
+Tests unitarios (ej.): `ErroresAsignacionTest`, mensajes de envío — `app/src/test/…`.
+
+---
 
 ## Organización del equipo
 
-| Integrante | Responsabilidad principal |
+| Integrante | Enfoque |
 |---|---|
-| Juan Mendoza | Modelos, Room, repositorio, `UtpScreen`, `DocenteScreen` y ViewModels asociados |
-| Gabriel Valdes | Login, dashboard estudiante, unidades, actividad/resultado, TextToSpeech, navegación |
+| Juan Mendoza (Integrante B) | Gateway/actividades/progreso, pantallas UTP remoto / docente / actividades / informes, Docker, APK, contrato HTTP |
+| Gabriel Valdes | Login/UI base estudiante, unidades, TTS, navegación |
+
+---
 
 ## Criterios técnicos cubiertos
 
-- Navegación entre roles y vistas
-- Formularios con validación (lógica en ViewModel, feedback visual en UI)
-- Estado con `StateFlow` / Compose
+- Navegación por rol
+- Formularios con validación (ViewModel + UI)
+- Estado con StateFlow / Compose
 - Animaciones funcionales
-- Persistencia local con Room
+- Room + consumo remoto del contrato
 - MVVM
-- Dos recursos nativos (galería / TTS)
+- Recursos nativos (galería / TTS / compartir PDF)
+- Backend multi-servicio detrás de gateway + Docker Compose
 
-## Notas
+---
 
-- Usuarios y contenidos son **ficticios** (semilla en `DatosSemilla`).
-- No se usa cámara, GPS ni micrófono.
-- El switch “Disponible para el estudiante” en la asignación se persiste (`activa`) y filtra lo que ve el alumno.
+## Notas / seguridad
+
+- Usuarios y contenidos de demo son **ficticios**.
+- No subir al remoto: `.env`, `*.jks`, `keystore.properties`.
+- Cleartext HTTP solo para demo local (`usesCleartextTraffic=true`).
+- Si la app dice *failed to connect to 127.0.0.1:8080*: Docker UP + `adb-reverse-mpaz.bat`.

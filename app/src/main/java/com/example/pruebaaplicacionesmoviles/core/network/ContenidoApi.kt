@@ -48,7 +48,7 @@ object ContenidoApiCliente {
 
     val servicio: ContenidoApi by lazy {
         Retrofit.Builder()
-            .baseUrl("http://127.0.0.1:8082/api/v1/")
+            .baseUrl("http://127.0.0.1:8080/api/v1/")
             .client(cliente)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

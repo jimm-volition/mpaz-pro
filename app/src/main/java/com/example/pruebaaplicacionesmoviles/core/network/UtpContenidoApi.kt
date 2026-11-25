@@ -129,14 +129,14 @@ object UtpContenidoApiCliente {
         .build()
 
     val servicio: UtpContenidoApi = Retrofit.Builder()
-        .baseUrl("http://127.0.0.1:8082/api/v1/")
+        .baseUrl("http://127.0.0.1:8080/api/v1/")
         .client(cliente)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
         .create(UtpContenidoApi::class.java)
 
     val historial: UtpHistorialApi = Retrofit.Builder()
-        .baseUrl("http://127.0.0.1:8081/api/v1/")
+        .baseUrl("http://127.0.0.1:8080/api/v1/")
         .client(cliente)
         .addConverterFactory(GsonConverterFactory.create())
         .build()

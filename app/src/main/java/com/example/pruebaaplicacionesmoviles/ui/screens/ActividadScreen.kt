@@ -195,11 +195,11 @@ fun ActividadScreen(
 
                         // Convertimos las cuatro alternativas en una lista temporal
                         val alternativas = listOf(
-                            pregunta.opcionA, // Índice 0
-                            pregunta.opcionB, // Índice 1
-                            pregunta.opcionC, // Índice 2
-                            pregunta.opcionD // Índice 3
-                        )
+                            pregunta.opcionA,
+                            pregunta.opcionB,
+                            pregunta.opcionC,
+                            pregunta.opcionD
+                        ).filter { it.isNotBlank() }
 
                         // Recorremos las cuatro alternativas de esta pregunta
                         alternativas.forEachIndexed { indiceAlternativa, texto ->
@@ -243,18 +243,17 @@ fun ActividadScreen(
                             }
                         }
 
-                        // La retroalimentación aparece solo después de guardar
                         if (estado.resultadoPorcentaje != null) {
-
-                            // Comparamos la alternativa elegida con la correcta
-                            val correcta =
-                                estado.respuestas[pregunta.id] == pregunta.indiceCorrecto
+                            val item = estado.feedback.find {
+                                it.preguntaId == pregunta.id.toLong()
+                            }
+                            val correcta = item?.correcta == true
 
                             Text(
                                 text = if (correcta) {
-                                    "✅ Respuesta correcta"
+                                    "Respuesta correcta"
                                 } else {
-                                    "❌ Respuesta incorrecta"
+                                    "Respuesta incorrecta"
                                 },
                                 color = if (correcta) {
                                     MaterialTheme.colorScheme.primary
@@ -263,14 +262,9 @@ fun ActividadScreen(
                                 }
                             )
 
-                            // Mostramos cuál era la respuesta correcta
-                            Text(
-                                text = "Respuesta correcta: " +
-                                        alternativas[pregunta.indiceCorrecto]
-                            )
-
-                            // Mostramos la explicación creada para esa pregunta
-                            Text(pregunta.explicacionRespuesta)
+                            if (!item?.explicacion.isNullOrBlank()) {
+                                Text(item?.explicacion.orEmpty())
+                            }
                         }
                     }
                 }

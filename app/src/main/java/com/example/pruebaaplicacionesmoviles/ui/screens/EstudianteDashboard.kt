@@ -33,11 +33,11 @@ fun EstudianteDashboard(
     unidades: List<Unidad>,
     progresos: List<Progreso>,
     onAbrirAsignatura: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    porcentajeServidor: Int? = null
 ) {
 
-    // Donde se calcula el progreso
-    val progresoGeneral = if (unidades.isEmpty()) {
+    val progresoGeneral = porcentajeServidor ?: if (unidades.isEmpty()) {
         0
     } else {
         unidades.sumOf { unidad ->
