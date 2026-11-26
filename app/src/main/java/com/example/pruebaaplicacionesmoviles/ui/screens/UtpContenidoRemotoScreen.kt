@@ -20,9 +20,14 @@ import com.example.pruebaaplicacionesmoviles.ui.components.BuscadorWikimedia
 @Composable
 fun UtpContenidoRemotoScreen(
     viewModel: UtpContenidosViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    // Subpantalla de actividades/pruebas (integrante B). Recibe id y código del OA y cómo volver.
+    actividadesDelObjetivo: (@Composable (objetivoId: Int, codigo: String, onVolver: () -> Unit) -> Unit)? = null
 ) {
     val estado by viewModel.estado.collectAsState()
+
+    // OA cuyo módulo de actividades está abierto (se conserva el resto del estado al volver).
+    var actividadesDe by remember { mutableStateOf<Pair<Int, String>?>(null) }
     val context = LocalContext.current
     val desplazamiento = rememberScrollState()
 
@@ -170,6 +175,13 @@ fun UtpContenidoRemotoScreen(
                 TextButton(onClick = { confirmarDeshabilitar = null }) { Text("Cancelar") }
             }
         )
+    }
+
+    // Todos los remember están arriba: al volver se conserva paso, unidad y OA elegidos.
+    val abiertas = actividadesDe
+    if (abiertas != null && actividadesDelObjetivo != null) {
+        actividadesDelObjetivo(abiertas.first, abiertas.second) { actividadesDe = null }
+        return
     }
 
     Column(
@@ -518,6 +530,15 @@ fun UtpContenidoRemotoScreen(
                                     },
                                     enabled = !ocupado && objetivo.estado == "BORRADOR"
                                 ) { Text("Editar") }
+                            }
+
+                            if (actividadesDelObjetivo != null) {
+                                Spacer(Modifier.height(8.dp))
+                                FilledTonalButton(
+                                    onClick = { actividadesDe = objetivo.id to objetivo.codigo },
+                                    enabled = !ocupado,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Actividades y prueba final") }
                             }
 
                             // Las transiciones de OA mantienen las reglas del backend.

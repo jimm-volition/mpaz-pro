@@ -1,46 +1,56 @@
 package com.example.pruebaaplicacionesmoviles.viewmodel
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.pruebaaplicacionesmoviles.MpazApp
-import com.example.pruebaaplicacionesmoviles.data.model.Asignacion
-import com.example.pruebaaplicacionesmoviles.data.model.EstadoUnidad
-import com.example.pruebaaplicacionesmoviles.data.model.Intento
-import com.example.pruebaaplicacionesmoviles.data.model.Rol
-import com.example.pruebaaplicacionesmoviles.data.model.Unidad
-import com.example.pruebaaplicacionesmoviles.data.model.Usuario
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
-import com.example.pruebaaplicacionesmoviles.core.network.EnvioDocenteRemoto
-import com.example.pruebaaplicacionesmoviles.core.network.IntentoDocenteRemoto
-import com.example.pruebaaplicacionesmoviles.core.network.ApiCliente
-import com.example.pruebaaplicacionesmoviles.core.network.GuardarAsignacionRequest
-import com.example.pruebaaplicacionesmoviles.core.network.ObjetivoDisponibleRemoto
-import com.example.pruebaaplicacionesmoviles.core.network.CrearInformeRequest
-import com.example.pruebaaplicacionesmoviles.core.network.InformeRemoto
-import com.example.pruebaaplicacionesmoviles.core.network.ValidarInformeRequest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.core.content.FileProvider
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.pruebaaplicacionesmoviles.core.network.ActividadRemota
+import com.example.pruebaaplicacionesmoviles.core.network.ApiCliente
+import com.example.pruebaaplicacionesmoviles.core.network.AsignacionRemota
+import com.example.pruebaaplicacionesmoviles.core.network.CrearInformeRequest
+import com.example.pruebaaplicacionesmoviles.core.network.EnvioDocenteRemoto
+import com.example.pruebaaplicacionesmoviles.core.network.GuardarAsignacionRequest
+import com.example.pruebaaplicacionesmoviles.core.network.InformeRemoto
+import com.example.pruebaaplicacionesmoviles.core.network.IntentoDocenteRemoto
+import com.example.pruebaaplicacionesmoviles.core.network.ObjetivoDisponibleRemoto
+import com.example.pruebaaplicacionesmoviles.core.network.ProgresoEstudianteRemoto
+import com.example.pruebaaplicacionesmoviles.core.network.ValidarInformeRequest
+import com.example.pruebaaplicacionesmoviles.data.model.Rol
+import com.example.pruebaaplicacionesmoviles.data.model.Usuario
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.io.File
 
 data class DocenteUiState(
     val docenteId: Int = 2,
     val cursoId: Long = 1,
+    val nombreCurso: String = "",
+    val cargando: Boolean = false,
     val estudiantes: List<Usuario> = emptyList(),
-    val unidadesAsignables: List<Unidad> = emptyList(),
     val objetivos: List<ObjetivoDisponibleRemoto> = emptyList(),
+    val asignaciones: List<AsignacionRemota> = emptyList(),
+
+    // Estudiante y OA con los que se está trabajando (resultados, seguimiento, informe).
+    val estudianteSeleccionado: Long? = null,
+    val objetivoSeleccionado: Long? = null,
+
     val enviosServidor: List<EnvioDocenteRemoto> = emptyList(),
     val intentosServidor: List<IntentoDocenteRemoto> = emptyList(),
+    val seguimiento: List<ProgresoEstudianteRemoto> = emptyList(),
+    val actividadesObjetivo: List<ActividadRemota> = emptyList(),
+    val cargandoDetalle: Boolean = false,
+
     val informe: InformeRemoto? = null,
+    val observacionInforme: String = "",
     val generandoInforme: Boolean = false,
-    val intentos: List<Intento> = emptyList(),
+
+    // Formulario de asignación
     val estudianteIdTexto: String = "",
     val unidadIdTexto: String = "",
     val fechaInicio: String = "2026-10-01",
@@ -55,88 +65,181 @@ data class DocenteUiState(
     val errorMaxIntentos: String = "",
     val errorConfirmacion: String = "",
     val mensaje: String = ""
-)
+) {
+    fun aliasEstudiante(id: Long?): String =
+        estudiantes.firstOrNull { it.id.toLong() == id }?.alias ?: id?.let { "Estudiante $it" } ?: "Todo el curso"
+
+    fun codigoObjetivo(id: Long?): String =
+        objetivos.firstOrNull { it.id == id }?.codigo ?: id?.let { "OA $it" } ?: "-"
+}
 
 class DocenteViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repositorio = (application as MpazApp).repositorio
-    private var observacion: Job? = null
+    private var carga: Job? = null
+    private var detalleEstudiante: Job? = null
+    private var detalleObjetivo: Job? = null
     private val _estado = MutableStateFlow(DocenteUiState())
     val estado: StateFlow<DocenteUiState> = _estado.asStateFlow()
 
-    init {
-        observar()
-    }
-
     fun observar(docenteId: Int = _estado.value.docenteId) {
-        observacion?.cancel()
-        _estado.update { it.copy(docenteId = docenteId) }
-        observacion = viewModelScope.launch {
-            val cursoId = try {
-                ApiCliente.docente.cursos().items.firstOrNull()?.id ?: 1L
+        carga?.cancel()
+        _estado.update { it.copy(docenteId = docenteId, cargando = true) }
+        carga = viewModelScope.launch {
+            val curso = try {
+                ApiCliente.docente.cursos().items.firstOrNull()
             } catch (_: Exception) {
-                1L
+                null
             }
+            val cursoId = curso?.id ?: 1L
 
             val objetivos = try {
                 ApiCliente.docente.objetivos(cursoId)
             } catch (e: Exception) {
                 _estado.update {
-                    it.copy(mensaje = "No se pudieron cargar los objetivos")
+                    it.copy(mensaje = mensajeDeError(e, "No se pudieron cargar los objetivos"))
                 }
                 emptyList()
             }
 
-            val estudiantesRemotos = try {
+            val estudiantes = try {
                 ApiCliente.docente.estudiantes(cursoId).items.map { est ->
                     Usuario(
                         id = est.id.toInt(),
                         alias = est.codigoUsuario ?: "EST${est.id}",
                         rol = Rol.ESTUDIANTE,
-                        curso = "Curso $cursoId",
+                        curso = curso?.nombre ?: "Curso $cursoId",
                         docenteId = docenteId
                     )
                 }
-            } catch (_: Exception) {
-                listOf(Usuario(3, "EST01", Rol.ESTUDIANTE, "2° Básico A", docenteId))
-            }
-
-            val resultados = try {
-                val estudianteId = estudiantesRemotos.firstOrNull()?.id?.toLong() ?: 3L
-                ApiCliente.docente.resultados(estudianteId)
             } catch (e: Exception) {
                 _estado.update {
-                    it.copy(mensaje = "No se pudieron cargar los resultados")
+                    it.copy(mensaje = mensajeDeError(e, "No se pudieron cargar los estudiantes"))
                 }
-                null
+                emptyList()
             }
 
-            combine(
-                repositorio.observarUnidades(),
-                repositorio.observarIntentosDocente(docenteId)
-            ) { unidades, intentos ->
-                unidades to intentos
-            }.collect { (unidades, intentos) ->
-                // Solo referencia local; la asignación real usa objetivos del servidor.
-                val asignables = unidades.filter {
-                    it.estado == EstadoUnidad.AUTORIZADO || it.estado == EstadoUnidad.PUBLICADO
-                }
+            val anterior = _estado.value
+            val estudianteElegido = anterior.estudianteSeleccionado
+                ?.takeIf { id -> estudiantes.any { it.id.toLong() == id } }
+                ?: estudiantes.firstOrNull()?.id?.toLong()
+            val objetivoElegido = anterior.objetivoSeleccionado
+                ?.takeIf { id -> objetivos.any { it.id == id } }
+                ?: objetivos.firstOrNull()?.id
+
+            _estado.update {
+                it.copy(
+                    cargando = false,
+                    cursoId = cursoId,
+                    nombreCurso = curso?.nombre.orEmpty(),
+                    objetivos = objetivos,
+                    estudiantes = estudiantes,
+                    estudianteSeleccionado = estudianteElegido,
+                    objetivoSeleccionado = objetivoElegido
+                )
+            }
+
+            cargarAsignaciones()
+            estudianteElegido?.let { cargarResultados(it) }
+            objetivoElegido?.let { cargarDetalleObjetivo(it) }
+        }
+    }
+
+    // ---------- Selección ----------
+
+    fun seleccionarEstudiante(id: Long) {
+        _estado.update {
+            it.copy(
+                estudianteSeleccionado = id,
+                estudianteIdTexto = id.toString(),
+                errorEstudiante = "",
+                informe = null,
+                mensaje = ""
+            )
+        }
+        cargarResultados(id)
+    }
+
+    fun seleccionarObjetivo(id: Long) {
+        _estado.update {
+            it.copy(
+                objetivoSeleccionado = id,
+                unidadIdTexto = id.toString(),
+                errorUnidad = "",
+                informe = null,
+                mensaje = ""
+            )
+        }
+        cargarDetalleObjetivo(id)
+    }
+
+    private fun cargarResultados(estudianteId: Long) {
+        detalleEstudiante?.cancel()
+        detalleEstudiante = viewModelScope.launch {
+            try {
+                val resultados = ApiCliente.docente.resultados(estudianteId)
                 _estado.update {
                     it.copy(
-                        cursoId = cursoId,
-                        unidadesAsignables = asignables,
-                        objetivos = objetivos,
-                        enviosServidor = resultados?.envios.orEmpty(),
-                        intentosServidor = resultados?.intentos.orEmpty(),
-                        intentos = intentos,
-                        estudiantes = estudiantesRemotos.ifEmpty {
-                            listOf(Usuario(3, "EST01", Rol.ESTUDIANTE, "2° Básico A", docenteId))
-                        }
+                        enviosServidor = resultados.envios.orEmpty(),
+                        intentosServidor = resultados.intentos.orEmpty()
+                    )
+                }
+            } catch (e: Exception) {
+                _estado.update {
+                    it.copy(
+                        enviosServidor = emptyList(),
+                        intentosServidor = emptyList(),
+                        mensaje = mensajeDeError(e, "No se pudieron cargar los resultados")
                     )
                 }
             }
         }
     }
+
+    /** Avance del curso en el OA + vista previa (sin solucionario) de sus prácticas publicadas. */
+    private fun cargarDetalleObjetivo(objetivoId: Long) {
+        detalleObjetivo?.cancel()
+        _estado.update { it.copy(cargandoDetalle = true) }
+        detalleObjetivo = viewModelScope.launch {
+            val cursoId = _estado.value.cursoId
+            val seguimiento = try {
+                ApiCliente.docente.progreso(cursoId, objetivoId).estudiantes.orEmpty()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            // El listado no trae preguntas: pedimos el detalle (sin clave de corrección).
+            val actividades = try {
+                ApiCliente.actividades.listar(objetivoId).map { resumen ->
+                    try {
+                        ApiCliente.actividades.obtener(resumen.id)
+                    } catch (_: Exception) {
+                        resumen
+                    }
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            _estado.update {
+                it.copy(
+                    cargandoDetalle = false,
+                    seguimiento = seguimiento,
+                    actividadesObjetivo = actividades
+                )
+            }
+        }
+    }
+
+    private suspend fun cargarAsignaciones() {
+        try {
+            val lista = ApiCliente.docente.asignaciones(_estado.value.cursoId, tamano = 100).items
+            _estado.update { it.copy(asignaciones = lista.sortedByDescending { a -> a.id }) }
+        } catch (e: Exception) {
+            _estado.update {
+                it.copy(mensaje = mensajeDeError(e, "No se pudieron cargar las asignaciones"))
+            }
+        }
+    }
+
+    // ---------- Formulario de asignación ----------
 
     fun actualizarEstudianteId(valor: String) {
         _estado.update {
@@ -176,6 +279,10 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
 
     fun actualizarAsignacionActiva(valor: Boolean) {
         _estado.update { it.copy(asignacionActiva = valor, mensaje = "") }
+    }
+
+    fun actualizarObservacion(valor: String) {
+        _estado.update { it.copy(observacionInforme = valor.take(2000)) }
     }
 
     fun limpiarMensaje() {
@@ -233,39 +340,77 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
                         datosConfirmados = false
                     )
                 }
+                cargarAsignaciones()
             } catch (ex: Exception) {
                 _estado.update {
-                    it.copy(mensaje = "No se pudo crear la asignación")
+                    it.copy(mensaje = mensajeDeError(ex, "No se pudo crear la asignación"))
                 }
             }
         }
     }
 
+    /** Activa o pausa una asignación existente (PUT con los mismos datos). */
+    fun alternarAsignacion(asignacion: AsignacionRemota) {
+        viewModelScope.launch {
+            try {
+                ApiCliente.docente.actualizar(
+                    asignacion.id,
+                    GuardarAsignacionRequest(
+                        cursoId = asignacion.cursoId,
+                        estudianteId = asignacion.estudianteId,
+                        objetivoAprendizajeId = asignacion.objetivoAprendizajeId,
+                        disponibleDesde = asignacion.disponibleDesde,
+                        disponibleHasta = asignacion.disponibleHasta,
+                        limiteIntentosPrueba = asignacion.limiteIntentosPrueba,
+                        activa = !asignacion.activa
+                    )
+                )
+                _estado.update {
+                    it.copy(mensaje = if (asignacion.activa) "Asignación pausada" else "Asignación activada")
+                }
+                cargarAsignaciones()
+            } catch (e: Exception) {
+                _estado.update {
+                    it.copy(mensaje = mensajeDeError(e, "No se pudo actualizar la asignación"))
+                }
+            }
+        }
+    }
+
+    // ---------- Informe ----------
+
     fun generarInforme() {
-        if (_estado.value.generandoInforme) return
+        val e = _estado.value
+        if (e.generandoInforme) return
+        val estudianteId = e.estudianteSeleccionado
+        val objetivoId = e.objetivoSeleccionado
+        if (estudianteId == null || objetivoId == null) {
+            _estado.update { it.copy(mensaje = "Elige un estudiante y un objetivo para el informe") }
+            return
+        }
         _estado.update { it.copy(generandoInforme = true, mensaje = "") }
         viewModelScope.launch {
             try {
-                val e = _estado.value
                 val informe = ApiCliente.docente.crearInforme(
                     CrearInformeRequest(
                         cursoId = e.cursoId,
-                        estudianteId = e.estudiantes.firstOrNull()?.id?.toLong() ?: 3L,
-                        objetivoAprendizajeId = e.objetivos.firstOrNull()?.id ?: 31L
+                        estudianteId = estudianteId,
+                        objetivoAprendizajeId = objetivoId
                     )
                 )
                 _estado.update {
                     it.copy(
                         generandoInforme = false,
                         informe = informe,
+                        observacionInforme = "",
                         mensaje = "Informe generado"
                     )
                 }
-            } catch (e: Exception) {
+            } catch (ex: Exception) {
                 _estado.update {
                     it.copy(
                         generandoInforme = false,
-                        mensaje = "No se pudo generar el informe"
+                        mensaje = mensajeDeError(ex, "No se pudo generar el informe")
                     )
                 }
             }
@@ -275,12 +420,13 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
     fun validarInforme() {
         val informe = _estado.value.informe ?: return
         if (_estado.value.generandoInforme) return
+        val observacion = _estado.value.observacionInforme.trim().ifEmpty { null }
         _estado.update { it.copy(generandoInforme = true, mensaje = "") }
         viewModelScope.launch {
             try {
                 val validado = ApiCliente.docente.validarInforme(
                     informe.id,
-                    ValidarInformeRequest(estado = "VALIDADO")
+                    ValidarInformeRequest(estado = "VALIDADO", observacion = observacion)
                 )
                 _estado.update {
                     it.copy(
@@ -293,7 +439,7 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
                 _estado.update {
                     it.copy(
                         generandoInforme = false,
-                        mensaje = "No se pudo validar el informe"
+                        mensaje = mensajeDeError(e, "No se pudo validar el informe")
                     )
                 }
             }
@@ -342,17 +488,14 @@ class DocenteViewModel(application: Application) : AndroidViewModel(application)
                 _estado.update {
                     it.copy(
                         generandoInforme = false,
-                        mensaje = "No se pudo abrir el PDF"
+                        mensaje = mensajeDeError(e, "No se pudo abrir el PDF")
                     )
                 }
             }
         }
     }
-
-    private fun fechaValida(valor: String): Boolean {
-        return Regex("""\d{4}-\d{2}-\d{2}""").matches(valor)
-    }
 }
+
 data class ErroresAsignacion(
     val errorEstudiante: String = "",
     val errorUnidad: String = "",

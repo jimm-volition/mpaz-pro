@@ -1,4 +1,4 @@
-﻿package com.example.pruebaaplicacionesmoviles.viewmodel
+package com.example.pruebaaplicacionesmoviles.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.example.pruebaaplicacionesmoviles.core.network.ApiCliente
+import com.example.pruebaaplicacionesmoviles.core.network.ContenidoApiCliente
+import com.google.gson.JsonElement
 import com.example.pruebaaplicacionesmoviles.core.network.EnvioActividadRequest
 import com.example.pruebaaplicacionesmoviles.core.network.FeedbackRemoto
 import com.example.pruebaaplicacionesmoviles.core.network.RespuestaEnviadaRequest
@@ -48,44 +50,59 @@ class ActividadViewModel(application: Application):AndroidViewModel(application)
     private var asignacionActual: Asignacion? = null
     private var pruebaActual: PruebaRemota? = null
 
+    // OA de cada prueba final listada, para volver a consultar su cupo al abrirla.
+    private val objetivoDePrueba = mutableMapOf<Int, Long>()
+
     fun cargarUnidad(estudianteId: Int, unidadId: Int) {
         _estado.value = ActividadUiState(cargando = true)
         asignacionActual = null
         pruebaActual = null
+        objetivoDePrueba.clear()
 
         viewModelScope.launch {
             try {
-                val remotas = ApiCliente.actividades.listar(31)
-                val lista = remotas.map { remota ->
-                    Actividad(
-                        id = remota.id.toInt(),
-                        unidadId = unidadId,
-                        titulo = remota.titulo,
-                        tipo = TipoActividad.PRACTICA,
-                        orden = 0
-                    )
-                }.toMutableList()
+                // OA publicados y asignados de la unidad (ms-contenidos filtra por el token).
+                val objetivos = idsDeObjetivos(
+                    ContenidoApiCliente.servicio.listarObjetivos(unidadId)
+                )
+                val lista = mutableListOf<Actividad>()
 
-                val prueba = try {
-                    ApiCliente.pruebas.obtener(31)
-                } catch (e: Exception) {
-                    null
+                for (objetivoId in objetivos) {
+                    ApiCliente.actividades.listar(objetivoId).forEach { remota ->
+                        lista += Actividad(
+                            id = remota.id.toInt(),
+                            unidadId = unidadId,
+                            titulo = remota.titulo,
+                            tipo = TipoActividad.PRACTICA,
+                            orden = lista.size
+                        )
+                    }
                 }
-                pruebaActual = prueba
-                if (prueba != null) {
+
+                for (objetivoId in objetivos) {
+                    val prueba = try {
+                        ApiCliente.pruebas.obtener(objetivoId)
+                    } catch (e: Exception) {
+                        null
+                    } ?: continue
+                    pruebaActual = prueba
+                    objetivoDePrueba[prueba.pruebaId.toInt()] = objetivoId
                     lista += Actividad(
                         id = prueba.pruebaId.toInt(),
                         unidadId = unidadId,
-                        titulo = "Prueba final",
+                        titulo = if (objetivos.size > 1) "Prueba final (OA $objetivoId)" else "Prueba final",
                         tipo = TipoActividad.PRUEBA_FINAL,
-                        orden = 1
+                        orden = lista.size
                     )
                 }
 
-                _estado.value = ActividadUiState(actividades = lista)
+                _estado.value = ActividadUiState(
+                    actividades = lista,
+                    mensaje = if (lista.isEmpty()) "Aún no hay actividades publicadas para esta unidad" else ""
+                )
             } catch (e: Exception) {
                 _estado.value = ActividadUiState(
-                    mensaje = "No se pudieron cargar las actividades"
+                    mensaje = mensajeDeError(e, "No se pudieron cargar las actividades")
                 )
             }
         }
@@ -107,7 +124,9 @@ class ActividadViewModel(application: Application):AndroidViewModel(application)
         viewModelScope.launch {
             try {
                 if (actividad.tipo == TipoActividad.PRUEBA_FINAL) {
-                    val prueba = ApiCliente.pruebas.obtener(31)
+                    val objetivoId = objetivoDePrueba[actividad.id]
+                        ?: throw IllegalStateException("Prueba sin objetivo")
+                    val prueba = ApiCliente.pruebas.obtener(objetivoId)
                     pruebaActual = prueba
                     if (!prueba.puedeRendir) {
                         val aviso = if (prueba.intentosRestantes <= 0) {
@@ -313,4 +332,18 @@ fun mensajeDeEnvio(
         return "Debes responder todas las preguntas"
     }
     return null
+}
+
+/** Extrae los id de OA de una respuesta paginada ({items:[]}) o de una lista simple. */
+fun idsDeObjetivos(respuesta: JsonElement): List<Long> {
+    val lista = when {
+        respuesta.isJsonArray -> respuesta.asJsonArray
+        respuesta.isJsonObject && respuesta.asJsonObject.has("items") ->
+            respuesta.asJsonObject.getAsJsonArray("items")
+        else -> return emptyList()
+    }
+    return lista.mapNotNull { elemento ->
+        elemento.takeIf { it.isJsonObject }?.asJsonObject?.get("id")
+            ?.takeUnless { it.isJsonNull }?.asLong
+    }.distinct()
 }
