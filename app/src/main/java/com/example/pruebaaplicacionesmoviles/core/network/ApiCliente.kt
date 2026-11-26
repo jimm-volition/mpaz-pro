@@ -83,4 +83,8 @@ object ApiCliente {
     val docente: DocenteApi by lazy {
         retrofit.create(DocenteApi::class.java)
     }
+
+    val utpActividades: UtpActividadApi by lazy {
+        retrofit.create(UtpActividadApi::class.java)
+    }
 }

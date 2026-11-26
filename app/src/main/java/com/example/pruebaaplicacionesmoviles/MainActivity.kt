@@ -20,6 +20,7 @@ import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadDetalleScreen
 import com.example.pruebaaplicacionesmoviles.ui.screens.UnidadesContenido
 import com.example.pruebaaplicacionesmoviles.ui.screens.UtpScreen
 import com.example.pruebaaplicacionesmoviles.ui.screens.UtpContenidoRemotoScreen
+import com.example.pruebaaplicacionesmoviles.ui.screens.UtpActividadesScreen
 import com.example.pruebaaplicacionesmoviles.ui.theme.PruebaAplicacionesMovilesTheme
 import com.example.pruebaaplicacionesmoviles.viewmodel.ActividadViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.ContenidoViewModel
@@ -27,6 +28,7 @@ import com.example.pruebaaplicacionesmoviles.viewmodel.DocenteViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.LoginViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpViewModel
 import com.example.pruebaaplicacionesmoviles.viewmodel.UtpContenidosViewModel
+import com.example.pruebaaplicacionesmoviles.viewmodel.UtpActividadesViewModel
 import com.example.pruebaaplicacionesmoviles.core.network.ApiCliente
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +57,9 @@ class MainActivity : ComponentActivity() {
 
         val utpContenidosViewModel =
             ViewModelProvider(this)[UtpContenidosViewModel::class.java]
+
+        val utpActividadesViewModel =
+            ViewModelProvider(this)[UtpActividadesViewModel::class.java]
 
         setContent {
             PruebaAplicacionesMovilesTheme {
@@ -270,7 +275,16 @@ class MainActivity : ComponentActivity() {
                             viewModel = utpContenidosViewModel,
                             onVolver = {
                                 utpContenidosViewModel.limpiar()
+                                utpActividadesViewModel.limpiar()
                                 loginViewModel.cerrarSesion()
+                            },
+                            actividadesDelObjetivo = { objetivoId, codigo, volver ->
+                                UtpActividadesScreen(
+                                    objetivoId = objetivoId,
+                                    codigoObjetivo = codigo,
+                                    viewModel = utpActividadesViewModel,
+                                    onVolver = volver
+                                )
                             }
                         )
                     }

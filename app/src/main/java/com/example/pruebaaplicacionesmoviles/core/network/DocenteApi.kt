@@ -116,7 +116,25 @@ data class ValidarInformeRequest(
     val observacion: String? = null
 )
 
+data class ProgresoEstudianteRemoto(
+    val estudianteId: Long,
+    val porcentajeAvance: Int,
+    val actualizadoEn: String?
+)
+
+data class SeguimientoRemoto(
+    val cursoId: Long,
+    val objetivoAprendizajeId: Long,
+    val estudiantes: List<ProgresoEstudianteRemoto> = emptyList()
+)
+
 interface DocenteApi {
+    @GET("docente/progreso")
+    suspend fun progreso(
+        @Query("cursoId") cursoId: Long,
+        @Query("objetivoAprendizajeId") objetivoId: Long
+    ): SeguimientoRemoto
+
     @GET("docente/cursos")
     suspend fun cursos(
         @Query("pagina") pagina: Int = 0,
